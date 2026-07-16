@@ -1,0 +1,7 @@
+version: 1
+artifacts:
+  - path: ap_invoice_agent.agent.yaml
+    type: cortex_agent
+    targets:
+      default:
+        object: COCO.AGENT.AP_INVOICE_AGENT

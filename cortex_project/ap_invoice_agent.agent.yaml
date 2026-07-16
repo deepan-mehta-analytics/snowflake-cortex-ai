@@ -1,0 +1,8 @@
+tools:
+  - tool_spec:
+      type: cortex_analyst_text_to_sql
+      name: "ap_analytics"
+tool_resources:
+  ap_analytics:
+    semantic_view: "COCO.SEMANTIC.SV_AP_ANALYTICS"
+    warehouse: "WH_COCO_PIPELINE"

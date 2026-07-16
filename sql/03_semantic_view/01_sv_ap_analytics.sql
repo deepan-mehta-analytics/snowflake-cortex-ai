@@ -22,13 +22,13 @@ CREATE OR REPLACE SEMANTIC VIEW sv_ap_analytics
     )
 
     FACTS (
-        invoices.invoice_amount AS invoice_amount
-            COMMENT = 'Total amount on the invoice, in its original transaction currency (no FX conversion — BR-002)',
-        vendor_summary.vendor_total_spend AS total_spend
-            COMMENT = 'Lifetime invoiced amount for the vendor across all sources',
-        vendor_summary.vendor_total_overdue_amount AS total_overdue_amount
-            COMMENT = 'Amount on the vendor''s invoices past their due date'
-    )
+          invoices.invoice_amount AS invoice_amount
+              COMMENT = 'Total amount on the invoice, in its original transaction currency (no FX conversion — BR-002)',
+          vendor_summary.vendor_total_spend AS total_spend
+              COMMENT = 'Lifetime invoiced amount for the vendor across all sources',
+          vendor_summary.vendor_total_overdue_amount AS total_overdue_amount
+              COMMENT = 'Amount on the vendor''s invoices past their due date'
+      )
 
     DIMENSIONS (
         invoices.vendor_name AS vendor_name WITH SYNONYMS ('supplier name') COMMENT = 'Vendor the invoice was billed by',
