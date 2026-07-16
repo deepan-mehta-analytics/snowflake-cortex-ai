@@ -1,0 +1,20 @@
+# ── Snowflake credentials ─────────────────────────────────────
+config/connection.toml                     # real connection file with account/user — only the .example.toml is tracked
+*.pem                                       # private keys for key-pair auth
+.env                                        # any local environment-variable file holding secrets
+
+# ── Python ────────────────────────────────────────────────────
+__pycache__/                                # compiled bytecode cache
+*.pyc                                       # compiled Python files
+.venv/                                      # local virtual environment
+venv/                                       # alternate virtual environment name
+
+# ── Eval run output ───────────────────────────────────────────
+eval/results/*.json                         # generated eval run artifacts, not source-controlled
+!eval/results/.gitkeep                      # keep the directory itself tracked
+
+# ── OS / editor ───────────────────────────────────────────────
+.DS_Store                                   # macOS Finder metadata
+Thumbs.db                                   # Windows Explorer thumbnail cache
+.vscode/                                    # editor-local settings
+.idea/                                      # JetBrains IDE settings

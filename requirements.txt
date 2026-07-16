@@ -1,0 +1,2 @@
+requests>=2.32          # HTTP client used by cortex_agent/run_agent.py to call the Cortex Agents REST API
+pyyaml>=6.0             # parses cortex_agent/agent_spec.yaml into a Python dict
