@@ -1,8 +1,8 @@
-# 🧾 Snowflake COCO — Multi-Source AP Invoice Intelligence Pipeline
+# 🧾 Snowflake Cortex AI — Multi-Source AP Invoice Intelligence Pipeline
 
 ## ⚡ Quick Summary
 
-COCO ingests accounts-payable invoices from four disconnected ERP/AP systems — SAP, Oracle, Baan, and Workday — and conforms them into a single, always-fresh Silver view of what the business owes. Snowflake Dynamic Tables handle the incremental transformation from bronze landing tables through to a vendor-level rollup, with source-specific quirks (status vocabularies, a known Baan duplicate-extract issue, dropped system-specific columns) handled per a set of documented, finance-approved business rules rather than ad hoc judgment calls.
+This pipeline ingests accounts-payable invoices from four disconnected ERP/AP systems — SAP, Oracle, Baan, and Workday — and conforms them into a single, always-fresh Silver view of what the business owes. Snowflake Dynamic Tables handle the incremental transformation from bronze landing tables through to a vendor-level rollup, with source-specific quirks (status vocabularies, a known Baan duplicate-extract issue, dropped system-specific columns) handled per a set of documented, finance-approved business rules rather than ad hoc judgment calls.
 
 On top of that pipeline sits a Snowflake Cortex Agent grounded in a native Semantic View: it answers quantitative questions ("which vendors have the most overdue invoices, and how much") via text-to-SQL against governed business metrics. A 15-question evaluation harness — covering core questions, rephrasings, edge cases, and deliberately ambiguous questions the agent should push back on — runs against the live agent so answer quality is measured, not assumed.
 
@@ -16,7 +16,7 @@ On top of that pipeline sits a Snowflake Cortex Agent grounded in a native Seman
 [![SQL](https://img.shields.io/badge/SQL-Dynamic_Tables-4479A1?style=for-the-badge&logo=snowflake&logoColor=white)](https://docs.snowflake.com/en/user-guide/dynamic-tables-about)
 [![Cortex AI](https://img.shields.io/badge/Cortex-Agents_%2B_Analyst-6E56CF?style=for-the-badge)](https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-agents)
 [![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/Status-In_Development-yellow?style=for-the-badge)](https://github.com/deepan-mehta-analytics/snowflake-coco)
+[![Status](https://img.shields.io/badge/Status-In_Development-yellow?style=for-the-badge)](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai)
 
 ---
 
@@ -98,7 +98,7 @@ bronze.sap_ap_   bronze.oracle_   bronze.baan_    bronze.workday_
 ## 📁 Repository Structure
 
 ```
-snowflake-coco/
+snowflake-cortex-ai/
 │
 ├── sql/
 │   ├── 00_setup/
@@ -149,8 +149,8 @@ snowflake-coco/
 
 #### 1. Clone the repository
 ```bash
-git clone https://github.com/deepan-mehta-analytics/snowflake-coco.git
-cd snowflake-coco
+git clone https://github.com/deepan-mehta-analytics/snowflake-cortex-ai.git
+cd snowflake-cortex-ai
 ```
 
 #### 2. Create and activate a virtual environment
