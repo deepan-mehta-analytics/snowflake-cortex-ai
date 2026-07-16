@@ -1,20 +1,40 @@
 # ── Snowflake credentials ─────────────────────────────────────
-config/connection.toml                     # real connection file with account/user — only the .example.toml is tracked
-*.pem                                       # private keys for key-pair auth
-.env                                        # any local environment-variable file holding secrets
+# Real connection file with account/user — only the .example.toml is tracked.
+config/connection.toml
+# Private keys for key-pair auth.
+*.pem
+# Any local environment-variable file holding secrets.
+.env
+# Any SQL script filled in with a real secret/PAT value, never committed.
+*.local.sql
+
+# ── Internal operational docs ─────────────────────────────────
+# Account-specific debugging narratives, not for the public repo.
+docs/troubleshooting/
+# Ad hoc SHOW/SELECT diagnostic output, not real lab/project content.
+**/schema-check.csv
 
 # ── Python ────────────────────────────────────────────────────
-__pycache__/                                # compiled bytecode cache
-*.pyc                                       # compiled Python files
-.venv/                                      # local virtual environment
-venv/                                       # alternate virtual environment name
+# Compiled bytecode cache.
+__pycache__/
+# Compiled Python files.
+*.pyc
+# Local virtual environment.
+.venv/
+# Alternate virtual environment name.
+venv/
 
 # ── Eval run output ───────────────────────────────────────────
-eval/results/*.json                         # generated eval run artifacts, not source-controlled
-!eval/results/.gitkeep                      # keep the directory itself tracked
+# Generated eval run artifacts, not source-controlled.
+eval/results/*.json
+# Keep the directory itself tracked.
+!eval/results/.gitkeep
 
 # ── OS / editor ───────────────────────────────────────────────
-.DS_Store                                   # macOS Finder metadata
-Thumbs.db                                   # Windows Explorer thumbnail cache
-.vscode/                                    # editor-local settings
-.idea/                                      # JetBrains IDE settings
+# macOS Finder metadata.
+.DS_Store
+# Windows Explorer thumbnail cache.
+Thumbs.db
+# Editor-local settings.
+.vscode/
+.idea/

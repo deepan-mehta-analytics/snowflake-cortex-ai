@@ -29,6 +29,14 @@ CREATE SCHEMA IF NOT EXISTS agent                         -- agent-facing suppor
     COMMENT = 'Cortex Agent support objects (evaluation tables, stages, functions)';
 
 -- ── Role grants (adjust principal names to your account) ───────
-GRANT USAGE ON WAREHOUSE wh_coco_pipeline TO ROLE sysadmin;   -- allow pipeline builders to use the warehouse
-GRANT USAGE ON DATABASE coco TO ROLE sysadmin;                -- allow pipeline builders to see the database
-GRANT USAGE ON ALL SCHEMAS IN DATABASE coco TO ROLE sysadmin; -- and all schemas within it
+-- OWNERSHIP (not just USAGE) on each schema: this account's schemas end up
+-- owned by whatever role was active at CREATE SCHEMA time (often
+-- ACCOUNTADMIN), and USAGE alone doesn't grant CREATE TABLE/DYNAMIC TABLE/
+-- SEMANTIC VIEW rights within them. COPY CURRENT GRANTS preserves anything
+-- already granted on the schema instead of wiping it on ownership transfer.
+GRANT USAGE ON WAREHOUSE wh_coco_pipeline TO ROLE sysadmin;         -- allow pipeline builders to use the warehouse
+GRANT USAGE ON DATABASE coco TO ROLE sysadmin;                      -- allow pipeline builders to see the database
+GRANT OWNERSHIP ON SCHEMA bronze TO ROLE sysadmin COPY CURRENT GRANTS;   -- full object-creation rights on bronze
+GRANT OWNERSHIP ON SCHEMA silver TO ROLE sysadmin COPY CURRENT GRANTS;   -- full object-creation rights on silver
+GRANT OWNERSHIP ON SCHEMA semantic TO ROLE sysadmin COPY CURRENT GRANTS; -- full object-creation rights on semantic
+GRANT OWNERSHIP ON SCHEMA agent TO ROLE sysadmin COPY CURRENT GRANTS;    -- full object-creation rights on agent
