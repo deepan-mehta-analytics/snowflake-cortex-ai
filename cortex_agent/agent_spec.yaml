@@ -2,11 +2,10 @@
 # Passed to the Cortex Agents REST API (see run_agent.py) to define which
 # tools the agent can call and how each tool is grounded. Adjust names to
 # match your account's database/schema if you changed the defaults in sql/.
-name: coco_ap_invoice_agent                                 # agent identifier used by the REST API
+name: ap_invoice_agent                                      # agent identifier used by the REST API
 description: >                                              # human-readable purpose shown in Snowsight
-  Answers questions about accounts-payable invoices by combining structured
-  lookups against the AP semantic view with free-text search over OCR'd
-  invoice documents.
+  Answers natural-language questions about AP spend and invoice aging by
+  running governed text-to-SQL against the AP analytics semantic view.
 
 models:
   orchestration: llama3.1-70b                               # model used to plan tool calls and compose the final answer
@@ -17,20 +16,10 @@ tools:
       name: ap_semantic_view
       description: >
         Answers quantitative questions about invoices, vendors, amounts,
-        due dates, and payment status using the governed AP semantic view.
-
-  - tool_spec:
-      type: cortex_search                                     # unstructured tool: NL question -> retrieved passages
-      name: invoice_document_search
-      description: >
-        Searches the raw text of OCR'd invoice documents for details not
-        captured structurally, such as free-text terms or clauses.
+        due dates, currencies, and approval status using the governed
+        AP analytics semantic view.
 
 tool_resources:
   ap_semantic_view:
-    semantic_view: coco.semantic.sv_ap_invoices               # fully-qualified semantic view backing this tool
-    warehouse: wh_coco_pipeline                                # warehouse used to execute generated SQL
-
-  invoice_document_search:
-    search_service: coco.agent.cs_invoice_documents            # fully-qualified Cortex Search service backing this tool
-    max_results: 5                                              # cap on retrieved passages per query
+    semantic_view: coco.semantic.sv_ap_analytics               # fully-qualified semantic view backing this tool
+    warehouse: wh_coco_pipeline                                 # warehouse used to execute generated SQL

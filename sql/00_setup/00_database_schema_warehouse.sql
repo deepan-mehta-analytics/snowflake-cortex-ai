@@ -9,22 +9,24 @@ CREATE WAREHOUSE IF NOT EXISTS wh_coco_pipeline           -- warehouse used for 
 
 -- ── Database ──────────────────────────────────────────────────
 CREATE DATABASE IF NOT EXISTS coco                        -- top-level database for the AP invoice pipeline
-    COMMENT = 'Multi-source AP invoice pipeline: raw sources -> Dynamic Tables -> semantic view -> Cortex Agent';
+    COMMENT = 'Multi-source AP invoice pipeline: bronze sources -> Silver Dynamic Table -> semantic view -> Cortex Agent';
 
 USE DATABASE coco;                                        -- switch context to the new database
 
 -- ── Schemas ───────────────────────────────────────────────────
-CREATE SCHEMA IF NOT EXISTS raw                           -- landing zone for each source system, minimally transformed
-    COMMENT = 'Raw landing tables per AP invoice source (ERP, vendor portal, OCR email)';
+-- Naming follows medallion architecture (bronze/silver), matching the
+-- reference workshop this project is built from (see docs/business_requirements/).
+CREATE SCHEMA IF NOT EXISTS bronze                        -- landing zone per AP invoice source system, minimally transformed
+    COMMENT = 'Bronze landing tables per AP invoice source (SAP, Oracle, Baan, Workday)';
 
-CREATE SCHEMA IF NOT EXISTS conformed                     -- Dynamic Tables that clean, union, and enrich raw data
-    COMMENT = 'Dynamic Tables: conformed and aggregated invoice data, auto-refreshed off raw';
+CREATE SCHEMA IF NOT EXISTS silver                        -- Dynamic Tables that clean, union, and conform bronze data
+    COMMENT = 'Silver Dynamic Tables: conformed and aggregated invoice data, auto-refreshed off bronze';
 
 CREATE SCHEMA IF NOT EXISTS semantic                      -- semantic view(s) grounding the Cortex Agent
     COMMENT = 'Semantic views exposing business-friendly facts/dimensions/metrics to Cortex Analyst';
 
-CREATE SCHEMA IF NOT EXISTS agent                         -- Cortex Search services + agent-facing objects
-    COMMENT = 'Cortex Search services and any agent-support objects (stages, functions)';
+CREATE SCHEMA IF NOT EXISTS agent                         -- agent-facing support objects
+    COMMENT = 'Cortex Agent support objects (evaluation tables, stages, functions)';
 
 -- ── Role grants (adjust principal names to your account) ───────
 GRANT USAGE ON WAREHOUSE wh_coco_pipeline TO ROLE sysadmin;   -- allow pipeline builders to use the warehouse
