@@ -1,4 +1,4 @@
-# 🧾 Snowflake Cortex AI — Multi-Source AP Invoice Intelligence Pipeline
+# 🧾 Snowflake Cortex AI
 
 ## ⚡ Quick Summary
 
@@ -6,7 +6,7 @@ This pipeline ingests accounts-payable invoices from four disconnected ERP/AP sy
 
 On top of that pipeline sits a Snowflake Cortex Agent grounded in a native Semantic View: it answers quantitative questions ("which vendors have the most overdue invoices, and how much") via text-to-SQL against governed business metrics. A 15-question evaluation harness — covering core questions, rephrasings, edge cases, and deliberately ambiguous questions the agent should push back on — runs against the live agent so answer quality is measured, not assumed.
 
-### Dynamic Tables + Semantic View + Cortex Agent + an evaluation harness that actually checks the answers
+### Multi-source AP invoices → Dynamic Tables → Semantic View → Cortex Agent
 
 ---
 
