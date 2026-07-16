@@ -14,7 +14,8 @@ FILES=(
     "01_bronze_sources/04_workday_ap_invoices.sql"             # bronze Workday landing table + sample data
     "02_silver/01_dt_silver_ap_invoices.sql"                    # conformed Silver Dynamic Table (BR-001..BR-009)
     "02_silver/02_dt_vendor_invoice_summary.sql"                # vendor rollup Dynamic Table
-    "03_semantic_view/01_sv_ap_analytics.sql"                    # semantic view grounding the Cortex Agent
+    "03_semantic_view/01_sv_ap_analytics.sql"                    # semantic view grounding Cortex Analyst
+    "03_semantic_view/02_cs_ap_invoice_search.sql"               # Cortex Search service grounding free-text lookup
 )
 
 # ── Apply each file in order via the Snowflake CLI ──────────

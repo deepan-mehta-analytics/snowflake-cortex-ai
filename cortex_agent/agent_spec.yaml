@@ -18,8 +18,19 @@ tools:
         Answers quantitative questions about invoices, vendors, amounts,
         due dates, currencies, and approval status using the governed
         AP analytics semantic view.
+  - tool_spec:
+      type: cortex_search                                     # unstructured tool: semantic search over free-text invoice lines
+      name: ap_invoice_search
+      description: >
+        Finds invoices by fuzzy/semantic matches against their free-text
+        line description (e.g. "hydraulic equipment", "PPE"), filterable
+        by vendor, approval status, source system, cost center, GL account,
+        or PO number.
 
 tool_resources:
   ap_semantic_view:
     semantic_view: coco.semantic.sv_ap_analytics               # fully-qualified semantic view backing this tool
     warehouse: wh_coco_pipeline                                 # warehouse used to execute generated SQL
+  ap_invoice_search:
+    name: coco.agent.ap_invoice_search                          # fully-qualified Cortex Search service backing this tool
+    max_results: 10                                             # cap on returned matches per query

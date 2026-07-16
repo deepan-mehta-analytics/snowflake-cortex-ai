@@ -79,6 +79,7 @@ def run_agent(question: str) -> str:
     final_text_parts = []                                       # accumulate text deltas across the SSE stream
     generated_sql = None                                        # SQL surfaced by the cortex_analyst_text_to_sql tool, if any
     sql_interpretation = None                                   # the tool's plain-English restatement of the question
+    other_tool_results = []                                     # raw fallback for tool results in an unrecognized shape (e.g. cortex_search, untested here)
 
     for line in response.iter_lines(decode_unicode=True):        # iterate over each SSE line as it arrives
         if not line or not line.startswith("data: "):           # skip keep-alive/blank lines
@@ -97,10 +98,13 @@ def run_agent(question: str) -> str:
                 final_text_parts.append(delta.get("text", ""))    # append this chunk to the running answer
             elif delta_type == "tool_results":                    # result of a tool call (e.g. generated SQL)
                 for item in delta.get("tool_results", {}).get("content", []):  # walk this tool's result content
-                    if item.get("type") == "json":                # cortex_analyst_text_to_sql returns a json payload
-                        payload_json = item.get("json", {})       # the {"sql": ..., "text": ...} payload
-                        generated_sql = payload_json.get("sql")   # governed SQL generated from the semantic view
-                        sql_interpretation = payload_json.get("text")  # the tool's restated interpretation of the question
+                    if item.get("type") == "json":                # structured tool result payload
+                        payload_json = item.get("json", {})       # the tool-specific payload
+                        if "sql" in payload_json:                  # recognized shape: cortex_analyst_text_to_sql
+                            generated_sql = payload_json.get("sql")   # governed SQL generated from the semantic view
+                            sql_interpretation = payload_json.get("text")  # the tool's restated interpretation of the question
+                        else:                                       # unrecognized shape (e.g. cortex_search) — don't silently drop it
+                            other_tool_results.append(json.dumps(payload_json, indent=2))
 
     answer = "".join(final_text_parts)                            # prefer a direct text answer if the model gave one
     if answer:                                                    # orchestration model produced its own summary
@@ -116,6 +120,9 @@ def run_agent(question: str) -> str:
         for row in rows:                                           # one line per result row
             lines.append(", ".join(str(value) for value in row))
         return "\n".join(lines)
+
+    if other_tool_results:                                        # unrecognized tool result shape (e.g. cortex_search) — raw fallback
+        return "\n\n".join(other_tool_results)
 
     return "(no answer or tool result returned)"                  # neither a text answer nor a tool result arrived
 

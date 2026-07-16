@@ -29,7 +29,8 @@ It implements:
 - **4-source bronze ingestion** — SAP, Oracle, Baan, and Workday AP invoice tables, each keeping its native column shape and loaded with realistic synthetic sample data (50 invoices total, 3 currencies)
 - **Rule-driven Silver conformance via Dynamic Tables** — a single union/normalize layer implementing 9 documented business rules (status normalization, no currency conversion, Baan duplicate handling, dropped system-specific columns, `TARGET_LAG = DOWNSTREAM`), plus a vendor-level rollup
 - **A native Semantic View** — business-friendly facts, dimensions, and metrics (`total_spend`, `overdue_by_vendor`, etc.) that ground natural-language questions in governed SQL instead of ad hoc joins
-- **A Cortex Agent** — Cortex Analyst (text-to-SQL over the semantic view) answering quantitative AP questions
+- **A Cortex Search service** — semantic search over free-text invoice line descriptions (`ap_invoice_search`), for fuzzy lookups that don't map cleanly to a `WHERE` clause
+- **A Cortex Agent** — Cortex Analyst (text-to-SQL over the semantic view) plus Cortex Search, answering both quantitative and free-text AP questions
 - **An evaluation harness** — a 15-question golden set (core / rephrasings / edge cases / deliberately ambiguous / data-validation) scored against the live agent with pass/fail heuristics
 
 ---
@@ -42,7 +43,8 @@ It implements:
 | Transformation | Dynamic Tables | Declarative, auto-refreshed incremental pipeline (no dbt/Airflow needed) |
 | Semantic layer | Snowflake Semantic View | Governed facts/dimensions/metrics grounding the agent's text-to-SQL tool |
 | Structured Q&A | Cortex Analyst | Text-to-SQL tool bound to the semantic view |
-| Orchestrating agent | Cortex Agents (REST API) | Wraps the Analyst tool in one conversational interface |
+| Unstructured Q&A | Cortex Search | Semantic search over free-text invoice line descriptions |
+| Orchestrating agent | Cortex Agents (REST API) | Wraps the Analyst and Search tools in one conversational interface |
 | Agent client / eval | Python 3.11, `requests`, `pyyaml` | Calls the Agents REST API and scores answers |
 | Deployment | Bash + Snowflake CLI (`snow sql`) | Applies all SQL in order against a target account |
 
@@ -72,12 +74,15 @@ bronze.sap_ap_   bronze.oracle_   bronze.baan_    bronze.workday_
                               ▼
                  silver.dt_vendor_invoice_summary   (Dynamic Table — vendor rollup)
                               │
-                              ▼
-                  semantic.sv_ap_analytics   (native Semantic View)
-                              │
-                              ▼
-                  Cortex Analyst (text-to-SQL)
-                              │
+                 ┌────────────┴────────────┐
+                 ▼                          ▼
+     semantic.sv_ap_analytics    agent.ap_invoice_search
+     (native Semantic View)      (Cortex Search service)
+                 │                          │
+                 ▼                          ▼
+     Cortex Analyst (text-to-SQL)   Cortex Search (semantic lookup)
+                 │                          │
+                 └────────────┬─────────────┘
                               ▼
                    Cortex Agent — ap_invoice_agent
                               │
@@ -91,7 +96,8 @@ bronze.sap_ap_   bronze.oracle_   bronze.baan_    bronze.workday_
 | `dt_silver_ap_invoices` | Dynamic Table unioning all 4 sources into one invoice-header shape, per BR-001..BR-009 |
 | `dt_vendor_invoice_summary` | Dynamic Table rolling invoices up to one row per vendor, incl. pending/overdue exposure |
 | `sv_ap_analytics` | Semantic View exposing facts/dimensions/metrics to Cortex Analyst |
-| `ap_invoice_agent` | Cortex Agent wrapping the Analyst tool behind one conversational interface |
+| `ap_invoice_search` | Cortex Search service over `line_description`, for fuzzy/semantic invoice lookup |
+| `ap_invoice_agent` | Cortex Agent wrapping the Analyst and Search tools behind one conversational interface |
 
 ---
 
@@ -113,10 +119,11 @@ snowflake-cortex-ai/
 │   │   ├── 01_dt_silver_ap_invoices.sql       ← unions all 4 sources per BR-001..BR-009
 │   │   └── 02_dt_vendor_invoice_summary.sql   ← vendor-level rollup + pending/overdue calc
 │   └── 03_semantic_view/
-│       └── 01_sv_ap_analytics.sql             ← semantic view grounding the Cortex Agent
+│       ├── 01_sv_ap_analytics.sql             ← semantic view grounding Cortex Analyst
+│       └── 02_cs_ap_invoice_search.sql        ← Cortex Search service grounding free-text lookup
 │
 ├── cortex_agent/
-│   ├── agent_spec.yaml                        ← agent tool spec (Cortex Analyst over sv_ap_analytics)
+│   ├── agent_spec.yaml                        ← agent tool spec (Cortex Analyst + Cortex Search)
 │   └── run_agent.py                           ← REST client to run the agent interactively
 │
 ├── eval/
@@ -136,6 +143,10 @@ snowflake-cortex-ai/
 ├── labs/                                       ← Snowflake Northstar badge lab materials (separate from the pipeline above)
 │   ├── coco-foundations/                       ← CoCo Foundations lab assets + how-to-run README
 │   └── from-zero-to-agents/                    ← From Zero to Agents lab assets + how-to-run README
+│
+├── cortex_project/                              ← Snowflake CLI declarative project definition, auto-generated by Snowsight Agent Studio
+│   ├── cortex-project.yaml                      ← project manifest (artifact → deployment target)
+│   └── ap_invoice_agent.agent.yaml              ← CLI-deployable equivalent of cortex_agent/agent_spec.yaml
 │
 ├── config/
 │   └── connection.example.toml                ← Snowflake connection template (copy → connection.toml)
@@ -182,7 +193,7 @@ cp config/connection.example.toml config/connection.toml      # macOS/Linux
 ```bash
 bash scripts/deploy.sh
 ```
-This applies, in order: warehouse/database/schema setup → the 4 bronze source tables (with sample data) → the 2 Silver Dynamic Tables → the semantic view.
+This applies, in order: warehouse/database/schema setup → the 4 bronze source tables (with sample data) → the 2 Silver Dynamic Tables → the semantic view → the Cortex Search service.
 
 #### 6. Set your Snowflake REST API credentials
 `run_agent.py` calls the Cortex Agents and SQL APIs directly with a Personal Access Token — it does not require registering a saved agent object first.
@@ -260,9 +271,9 @@ Apex Staffing Solutions, 100000.00
 - The source data has no paid/unpaid flag — "overdue" is approximated as `due_date < CURRENT_DATE()` — since the sample data is dated 2025, this approximation drifts further from reality the longer the demo sits unrefreshed
 - `eval/metrics.py` checks are heuristic (keyword/shape-based), not semantic — a good answer can fail a check and vice versa; the 2 failing "ambiguous" checks in the results above are scorer gaps, not agent defects
 - No CI pipeline runs `eval/run_eval.py` automatically on change
-- No unstructured/OCR document search — this repo's scope was narrowed to match the real reference dataset (structured ERP/AP sources only); Cortex Search over scanned invoice text is a possible future extension, not implemented
 - Snowsight's Agent Studio UI and the `DATA_AGENT_RUN` SQL function were both unreliable for testing the registered agent object during development (hung/incomplete tool configuration); `cortex_agent/run_agent.py`'s direct REST client sidesteps this by embedding the full tool spec in each call rather than depending on the registered agent object, and is the supported path for this repo
 - The `cortex_analyst_text_to_sql` tool returns governed SQL, not executed results — `run_agent.py` executes that SQL itself via the SQL API rather than relying on the orchestration model to do so
+- `ap_invoice_search` (Cortex Search over `line_description`) is wired into `agent_spec.yaml`, but `run_agent.py`'s result formatting has only been exercised against `cortex_analyst_text_to_sql` responses — its `cortex_search` result handling is an untested generic JSON fallback, not a confirmed-working formatter, until it's actually run live
 
 ## 🔜 Roadmap
 
