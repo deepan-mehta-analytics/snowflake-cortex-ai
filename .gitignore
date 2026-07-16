@@ -13,6 +13,11 @@ config/connection.toml
 docs/troubleshooting/
 # Ad hoc SHOW/SELECT diagnostic output, not real lab/project content.
 **/schema-check.csv
+# Snowsight's default export filename for ad hoc worksheet results — these
+# have carried real account/user PII (email, login name) during debugging.
+**/Untitled*.csv
+# Project-level Claude instructions are private working notes, never public.
+CLAUDE.md
 
 # ── Python ────────────────────────────────────────────────────
 # Compiled bytecode cache.
