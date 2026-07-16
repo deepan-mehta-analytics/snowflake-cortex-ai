@@ -63,5 +63,10 @@ step below is a prompt you paste into that panel; I can't run it for you.
 
 ## Status
 
-Assets downloaded and verified. Not yet run against the live Snowflake
-account.
+Complete. Demos 1–3 all run against the live account: `SILVER_AP_INVOICES`
+Dynamic Table (SAP+Oracle, then all 4 sources with BR-001/BR-003), a
+semantic view + Cortex Agent on top of it (quality score improved from 0/6
+to fully passing after the best-practices audit fix), all correctly scoped
+to `COCO_WORKSHOP` with the real `coco` database untouched. Auto-grader
+passed: "Congratulations! You have successfully completed the Cortex Code
+Foundations workshop!"
