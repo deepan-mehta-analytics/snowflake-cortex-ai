@@ -19,6 +19,7 @@ labs/coco-foundations/assets/dynamic-tables/
 # have carried real account/user PII (email, login name) during debugging.
 **/Untitled*.csv
 **/scratchpad*.csv
+**/Autograder_Result*.csv
 # Project-level Claude instructions are private working notes, never public.
 CLAUDE.md
 
