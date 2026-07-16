@@ -226,7 +226,7 @@ Not yet populated — no data has been loaded into a live Snowflake account and 
 
 ## 📂 Dataset
 
-Synthetic AP invoice data (50 invoices across SAP, Oracle, Baan, and Workday; USD/EUR/GBP) plus the accompanying business-requirements CSVs and 15-question evaluation set are sourced from Snowflake's official **[Cortex Code Foundations](https://github.com/hindcraig3/cortex-code-foundations)** workshop — a hands-on lab for Snowflake's Cortex Code (CoCo) AI coding agent. This repo implements the pipeline that workshop describes (Dynamic Tables → Semantic View → Cortex Agent → evaluation framework) as a standalone, version-controlled project. See `docs/business_requirements/README.md` for the rule-by-rule mapping from that workshop's requirements to this repo's SQL.
+Synthetic AP invoice data (50 invoices across SAP, Oracle, Baan, and Workday; USD/EUR/GBP) plus the accompanying business-requirements CSVs and 15-question evaluation set are sourced from Snowflake's official **[Cortex Code Foundations](https://github.com/hindcraig3/cortex-code-foundations)** workshop — a hands-on lab for Snowflake's Cortex Code (CoCo) AI coding agent. This repo implements the pipeline that workshop describes (Dynamic Tables → Semantic View → Cortex Agent → evaluation framework) as a standalone, version-controlled project. See `docs/business_requirements/README.md` for the rule-by-rule mapping from that workshop's requirements to this repo's SQL, and `docs/dynamic-tables-reference/README.md` for the Dynamic Tables best-practice reference the Silver layer's design follows.
 
 ---
 
