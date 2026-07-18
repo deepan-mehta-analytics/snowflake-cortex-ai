@@ -105,13 +105,35 @@ CoCo Foundations lab. Its own database: `DASH_DB_SI`.
 
 ## Status
 
-In progress, paused mid-lab. Done against the live account: `setup.sql`
-(all 5 tables created/populated), the AI enrichment query (sentiment +
-classification over `support_cases`), the `ENRICHED_MARKETING_INTELLIGENCE`
-Dynamic Table, the semantic view (saved as `SEMANTIC_VIEW_AUTOPILOT`, not
-`SEMANTIC_VIEW`), and the `campaign_search` Cortex Search service. The
-`MarketingAgent` object was also created, but **its tool configuration is
-not correct yet** — flagged by the user at end of session, not yet
-diagnosed. Not yet done: fix the agent's tool config, run validation
-(sample questions + Trace panel), and the auto-grader. Run this lab *after*
-CoCo Foundations, per the intended sequence — that part is satisfied.
+**Complete** — auto-grader passed, all steps done against the live account:
+`setup.sql` (all 5 tables created/populated), the AI enrichment query
+(sentiment + classification over `support_cases`), the
+`ENRICHED_MARKETING_INTELLIGENCE` Dynamic Table, the semantic view (saved as
+`SEMANTIC_VIEW_AUTOPILOT`, not `SEMANTIC_VIEW`), the `campaign_search` Cortex
+Search service, and `MarketingAgent` with all 3 tools correctly configured
+(semantic view, Cortex Search, `SEND_EMAIL()` procedure). Validated against
+all 4 sample questions in step 8, with the Trace panel confirming clean
+single-pass tool execution. Run this lab *after* CoCo Foundations, per the
+intended sequence — satisfied.
+
+### Known limitations
+
+- The `MarketingAgent`'s tool configuration initially had two real bugs
+  (traced via `DESCRIBE AGENT`, not guessed): only 1 of the intended 3 tools
+  was present, and the one present tool referenced a nonexistent warehouse
+  (`DASH_WH` instead of the real `DASH_WH_SI`). Root cause: Snowsight's Agent
+  Studio (a preview feature) silently failed to persist Tools-tab edits on
+  Save/Publish at least twice. Fixed by issuing `CREATE OR REPLACE AGENT ...
+  FROM SPECIFICATION` directly via SQL instead of the UI.
+- The `ENRICHED_MARKETING_INTELLIGENCE` Dynamic Table (step 4's `JOIN
+  support_cases s ON m.category = s.product`) always returns 0 rows against
+  the quickstart's own sample data — `support_cases.product` values
+  (`Cyclone Helmet`, `ThermoJacket Pro`, etc.) don't match either
+  `marketing_campaign_metrics.category` (`Fitness Wear`) or
+  `products.PRODUCT_NAME` (`Fitness Item 1`, etc.) under any join path. This
+  is a vendor sample-data inconsistency, not fixable without fabricating a
+  mapping — the agent correctly reports it can't answer clicks-vs-satisfaction
+  questions rather than fabricating a result.
+- `dash_wh_si` defaults to `warehouse_size='large'` in `setup.sql`; resized to
+  `XSMALL` with `AUTO_SUSPEND = 60` after this lab burned meaningfully more
+  credit than expected during agent testing/retries.
