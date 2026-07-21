@@ -108,8 +108,20 @@ dropdown — exact display title not yet confirmed, look for wording close to
 
 ## Status
 
-**Scaffolded, recovered, and verified — not yet run against the live
-account.** All 4 asset files recovered and cross-verified per the recovery
-story above; `assets/create-dt.sql`/`chaining-dt.sql`/`pipeline.sql` read
-through to the guide's own "Conclusion And Resources" section to confirm
-nothing was truncated.
+**Live and verified — auto-grader not yet run.** All 4 asset files recovered
+and cross-verified per the recovery story above; `assets/create-dt.sql`/
+`chaining-dt.sql`/`pipeline.sql` read through to the guide's own "Conclusion
+And Resources" section to confirm nothing was truncated.
+
+Pipeline run live and independently verified via SQL (not just trusted from
+"it ran"):
+- `raw_db.public`: `customers` 1,000 rows, `products` 100 rows, `orders`
+  10,000 rows — matches `setup.sql` exactly
+- `analytics_db.public` Dynamic Tables all `ACTIVE`: `stg_customers_dt`
+  (`TARGET_LAG=DOWNSTREAM`), `stg_orders_dt` (`TARGET_LAG='5 minutes'`,
+  confirming `pipeline.sql`'s `ALTER DYNAMIC TABLE` was applied),
+  `fct_customer_orders_dt` (definition confirms the `WHERE o.product_id IS
+  NOT NULL` data-quality filter from `pipeline.sql` is live)
+- `fct_customer_orders_dt`: 10,000 rows, **0** with a null `product_id` —
+  the null filter is working correctly
+- `compute_wh` stayed X-Small throughout, confirming the cost note above
