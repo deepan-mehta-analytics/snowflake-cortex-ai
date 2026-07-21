@@ -6,7 +6,7 @@ shared databases, warehouses, or objects with the main project.
 
 | Day | Lab | Folder | Status |
 |---|---|---|---|
-| 1 | Data Engineering with Snowflake | [`northstar-data-engineering/`](northstar-data-engineering/README.md) | Scaffolded, not yet run |
+| 1 | Data Engineering with Snowflake | [`northstar-data-engineering/`](northstar-data-engineering/README.md) | **Complete** — auto-grader passed |
 | 1 | Create Declarative Data Pipelines with Dynamic Tables | `declarative-dynamic-tables/` | Not yet scaffolded — real guide content not yet verified (see below) |
 | 2 | CoCo Foundations | [`coco-foundations/`](coco-foundations/README.md) | **Complete** — auto-grader passed |
 | 2 | From Zero to Agents | [`from-zero-to-agents/`](from-zero-to-agents/README.md) | **Complete** — auto-grader passed |
