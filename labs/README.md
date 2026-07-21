@@ -1,13 +1,13 @@
 # Snowflake Northstar Badge Labs
 
-Four labs across two days, each independently graded. Fully separate from
-this repo's core AP-invoice pipeline (`sql/`, `cortex_agent/`, `eval/`) — no
+**All 4 labs complete — Northstar Badge earned.** Fully separate from this
+repo's core AP-invoice pipeline (`sql/`, `cortex_agent/`, `eval/`) — no
 shared databases, warehouses, or objects with the main project.
 
 | Day | Lab | Folder | Status |
 |---|---|---|---|
 | 1 | Data Engineering with Snowflake | [`northstar-data-engineering/`](northstar-data-engineering/README.md) | **Complete** — auto-grader passed |
-| 1 | Create Declarative Data Pipelines with Dynamic Tables | [`declarative-dynamic-tables/`](declarative-dynamic-tables/README.md) | Live and verified, auto-grader not yet run — see its README for the recovery story (guide's own GitHub links are dead) |
+| 1 | Create Declarative Data Pipelines with Dynamic Tables | [`declarative-dynamic-tables/`](declarative-dynamic-tables/README.md) | **Complete** — auto-grader passed |
 | 2 | CoCo Foundations | [`coco-foundations/`](coco-foundations/README.md) | **Complete** — auto-grader passed |
 | 2 | From Zero to Agents | [`from-zero-to-agents/`](from-zero-to-agents/README.md) | **Complete** — auto-grader passed |
 

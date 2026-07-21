@@ -108,7 +108,10 @@ dropdown — exact display title not yet confirmed, look for wording close to
 
 ## Status
 
-**Live and verified — auto-grader not yet run.** All 4 asset files recovered
+**Complete — auto-grader passed** ("You've successfully completed Dynamic
+Tables lab!"). All 7 checks (BWDT01–07) independently pre-verified via
+direct SQL before the real grader ran — no gotchas this time (unlike Lab 1's
+Streamlit title issue), all 7 passed on the first check. All 4 asset files recovered
 and cross-verified per the recovery story above; `assets/create-dt.sql`/
 `chaining-dt.sql`/`pipeline.sql` read through to the guide's own "Conclusion
 And Resources" section to confirm nothing was truncated.
