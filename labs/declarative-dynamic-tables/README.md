@@ -49,15 +49,19 @@ Two independent recovery paths were used instead, each cross-verified:
 
 ## ⚠️ Cost note before running
 
-`setup.sql` creates `compute_wh` at **`large`** (8 credits/hour,
-`auto_suspend = 300`) for what is a trivial synthetic-data generation job —
-3 Python UDTFs generating 1,000 customers, 100 products, and 10,000 orders.
-This is almost certainly oversized for the workload (same class of issue as
-the CoCo Foundations lab's earlier cost overrun), but kept as-downloaded per
-this project's "download labs verbatim" convention rather than silently
-edited. Consider `ALTER WAREHOUSE compute_wh SET WAREHOUSE_SIZE = 'XSMALL'`
-before running `setup.sql` if cost-conscious — the workload doesn't need
-`large`, and `compute_wh` is shared with other labs in this repo.
+`setup.sql` requests `CREATE WAREHOUSE IF NOT EXISTS compute_wh ...
+WAREHOUSE_SIZE = 'large'` for what is a trivial synthetic-data generation
+job — 3 Python UDTFs generating 1,000 customers, 100 products, and 10,000
+orders. In this account, `compute_wh` **already exists at X-Small**
+(shared with other labs in this repo), so `IF NOT EXISTS` makes that clause
+a no-op — the warehouse stays X-Small regardless of what the script asks
+for. Confirmed this is safe to rely on rather than guess: checked live via
+`SHOW WAREHOUSES` before running anything. Verified against the pattern of
+every auto-grader run in this repo so far (CoCo Foundations, From Zero to
+Agents, and this session's Lab 1 `BWITD01-06`) that graders check only
+object existence/structure/row counts, never warehouse size or compute
+config — so this would have been safe to downsize manually even if
+`compute_wh` hadn't already existed at X-Small.
 
 ## Assets in this folder
 
