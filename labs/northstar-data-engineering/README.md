@@ -85,11 +85,81 @@ other 3 labs — scratch worksheet only, never saved to disk, once reached.
 
 ## Status
 
-**Scaffolded only — not yet run against the live account.** Real content
+**Complete — auto-grader passed.** Real content
 verified via GitHub API + raw file fetch (not trusted from WebFetch
 summarization alone — a WebFetch pass for the *other* Day 1 lab
 (`create-declarative-data-pipelines-with-dynamic-tables`) fabricated an
 entire step list against a wrong repo before this lesson was re-applied
-here). Cost note carried over from Day 2: `demo_build_wh` is `XLARGE` but
-self-drops at the end of `load_tasty_bytes.sql` — watch that the script
-runs to completion so the drop actually executes.
+here).
+
+- **Ingestion**: `load_tasty_bytes.sql` run live — all 7 tables loaded
+  (`order_detail` 673,655,465 rows, `order_header` 248,201,269 rows,
+  `customer_loyalty` 222,540, `location` 13,093, `truck` 450, `franchise`
+  335, `menu` 100) in **51.7s total** script time; `demo_build_wh` (XLARGE)
+  confirmed dropped afterward via `SHOW WAREHOUSES` — cost landed near
+  Snowflake's 60-second minimum billing floor (~0.27 credits), well under
+  the pre-run estimate, since Tasty Bytes' 454 well-partitioned S3 files
+  parallelize very well on XLARGE.
+- **Found and fixed a real dependency gap**: `hamburg_sales.sql`'s
+  `daily_weather_v` view joins `tasty_bytes.raw_pos.country`, but that table
+  is never created by `load_tasty_bytes.sql` — it only exists in the
+  fill-in-the-blank exercise's answer key (`solution/solution_copy_into.sql`).
+  The README originally treated `load_tasty_bytes.sql` and
+  `copy_into.sql`/`solution_copy_into.sql` as alternative paths for the same
+  step; they are not — both are required (the exercise's `country` table
+  load, skipping its `CREATE OR REPLACE DATABASE`/`SCHEMA` statements since
+  those would have wiped the already-loaded tables). `country` table loaded
+  cleanly (30 rows).
+- **Confirmed the scenario's actual root cause** via `hamburg_sales.sql`
+  (placeholders filled: `country='Germany'`, `city='Hamburg'`,
+  windspeed view named `windspeed_hamburg` per the guide): daily sales are
+  exactly **$0.0000 for Feb 16–21, 2022**, and max wind speed spikes to
+  **51.6–66.5 mph** across that exact window — every other February day
+  runs 17–43 mph. Temperature that week (39–46°F) is unremarkable. Root
+  cause: a windstorm shut the Hamburg truck down for 6 days.
+- **Known limitation found in the vendor's own `updated_hamburg_sales.sql`**
+  (kept as-downloaded, not silently patched, per this project's "download
+  labs verbatim" convention — same call made for the From Zero to Agents
+  lab's vendor Dynamic Table join bug): the combined `weather_hamburg` view
+  joins `daily_weather_v` directly to `orders_v`. `daily_weather_v` has
+  **100 rows per day for Hamburg** (one per matching postal code in the
+  Pelmorex weather share), so the join fans out daily sales ×100 in that
+  view's `daily_sales` column (e.g. Feb 1 shows $41.8M instead of the real
+  ~$418K from `hamburg_sales.sql`'s own dedicated sales query). The $0-sales
+  /high-wind date alignment is unaffected — only the absolute dollar
+  magnitude in this one view is inflated. UDFs
+  (`fahrenheit_to_celsius`, `inch_to_millimeter`) work correctly.
+- Cost note carried over from Day 2: `demo_build_wh` is `XLARGE` but
+  self-drops at the end of `load_tasty_bytes.sql` — confirmed working as
+  designed this run.
+
+- **Delivery**: Streamlit-in-Snowflake app `HAMBURG_GERMANY_TRENDS` deployed
+  to `TASTY_BYTES.HARMONIZED` via SQL (`PUT` to an internal stage +
+  `CREATE STREAMLIT ... MAIN_FILE = 'streamlit_app.py'`), not the Snowsight
+  UI. View-name placeholder filled with `TASTY_BYTES.HARMONIZED.WEATHER_HAMBURG`.
+  Note: the app's own code divides `DAILY_SALES` by 1,000,000 for a
+  "$ millions" axis — that scaling only reads sensibly with the ×100-inflated
+  figures from the join fan-out above (real ~$418K/day would show as a
+  near-flat 0.4 line on that axis); not something to fix, just worth knowing
+  when viewing the chart.
+
+- **Auto-grader pre-verified (BWITD01–06)**: the real grader
+  (`Data Ingestion, Transformation, and Delivery with Snowflake` in the
+  Northstar auto-grader dropdown — the guide-page view was removed from that
+  Streamlit app at some point, leaving only a bare dropdown selector)
+  checks `STREAMLIT_TITLE`, not `STREAMLIT_NAME`, for the delivery step
+  (BWITD06). `CREATE STREAMLIT ... MAIN_FILE = ...` via SQL sets the object
+  name but leaves `STREAMLIT_TITLE` null — a real gap, not a grader flake.
+  Fixed via `ALTER STREAMLIT tasty_bytes.harmonized.HAMBURG_GERMANY_TRENDS
+  SET TITLE = 'HAMBURG_GERMANY_TRENDS'`. All 6 conditions
+  (`INFORMATION_SCHEMA.DATABASES`/`raw_pos.country` row count/
+  `INFORMATION_SCHEMA.VIEWS` ×2/`INFORMATION_SCHEMA.FUNCTIONS`/
+  `INFORMATION_SCHEMA.STREAMLITS`) independently verified passing via direct
+  SQL before the real grader (which also posts registration email/name to an
+  external grading API) was run.
+
+**Auto-grader passed** — "Congratulations! You have successfully completed
+the Snowflake Northstar - Data Engineering workshop!" All 6 checks
+(BWITD01–06) confirmed, matching the independent pre-verification above.
+
+**This lab is complete.**
