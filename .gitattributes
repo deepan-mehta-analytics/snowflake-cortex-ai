@@ -1,0 +1,4 @@
+# GitHub Linguist misidentifies Snowflake SQL (.sql files — Dynamic Tables, Semantic Views)
+# as PLpgSQL, which implies Postgres-specific procedural code that isn't part of this project.
+# Force the generic, dialect-neutral "SQL" label instead.
+*.sql linguist-language=SQL
