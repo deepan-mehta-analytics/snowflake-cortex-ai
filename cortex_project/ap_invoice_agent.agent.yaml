@@ -1,8 +1,27 @@
+models:
+  orchestration: auto
+instructions:
+  response: "Answer concisely. State amounts with their currency; amounts are not converted between USD, EUR and GBP. Say which source systems the answer covers."
+  orchestration: "Use ap_semantic_view for counts, totals, vendors, due dates, overdue amounts and approval status. Use ap_invoice_search to find invoices by what was bought, from the free-text line description."
+  sample_questions:
+    - question: "Which vendors have the most overdue invoices?"
+    - question: "Find invoices for hydraulic equipment."
 tools:
   - tool_spec:
-      type: cortex_analyst_text_to_sql
-      name: "ap_analytics"
+      type: "cortex_analyst_text_to_sql"
+      name: "ap_semantic_view"
+      description: "Answers quantitative questions about invoices, vendors, amounts, due dates, currencies and approval status using the governed AP analytics semantic view."
+  - tool_spec:
+      type: "cortex_search"
+      name: "ap_invoice_search"
+      description: "Finds invoices by semantic match on the free-text line description, filterable by vendor, approval status, source system, cost center, GL account or PO number."
 tool_resources:
-  ap_analytics:
+  ap_semantic_view:
     semantic_view: "COCO.SEMANTIC.SV_AP_ANALYTICS"
-    warehouse: "WH_COCO_PIPELINE"
+    execution_environment:
+      type: "warehouse"
+      warehouse: "WH_COCO_PIPELINE"
+      query_timeout: 60
+  ap_invoice_search:
+    search_service: "COCO.AGENT.AP_INVOICE_SEARCH"
+    max_results: 10

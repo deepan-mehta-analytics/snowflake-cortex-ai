@@ -4,9 +4,9 @@
 
 This pipeline ingests accounts-payable invoices from four disconnected ERP/AP systems — SAP, Oracle, Baan, and Workday — and conforms them into a single, always-fresh Silver view of what the business owes. Snowflake Dynamic Tables handle the incremental transformation from bronze landing tables through to a vendor-level rollup, with source-specific quirks (status vocabularies, a known Baan duplicate-extract issue, dropped system-specific columns) handled per a set of documented, finance-approved business rules rather than ad hoc judgment calls.
 
-On top of that pipeline sits a Snowflake Cortex Agent grounded in a native Semantic View: it answers quantitative questions ("which vendors have the most overdue invoices, and how much") via text-to-SQL against governed business metrics. A 15-question evaluation harness — covering core questions, rephrasings, edge cases, and deliberately ambiguous questions the agent should push back on — runs against the live agent so answer quality is measured, not assumed.
+On top of that pipeline sits a Snowflake Cortex Agent grounded in a native Semantic View: it answers quantitative questions ("which vendors have the most overdue invoices, and how much") via text-to-SQL against governed business metrics. A 15-question evaluation harness — covering core questions, rephrasings, edge cases, and deliberately ambiguous questions the agent should push back on — runs against the live agent so answer quality is measured, not assumed. The same agent is also published through a Snowflake-managed MCP server, so Claude can query it directly over OAuth as a least-privilege Snowflake user.
 
-### Multi-source AP invoices → Dynamic Tables → Semantic View → Cortex Agent
+### Multi-source AP invoices → Dynamic Tables → Semantic View → Cortex Agent → MCP for Claude
 
 ---
 
@@ -31,6 +31,7 @@ It implements:
 - **A native Semantic View** — business-friendly facts, dimensions, and metrics (`total_spend`, `overdue_by_vendor`, etc.) that ground natural-language questions in governed SQL instead of ad hoc joins
 - **A Cortex Search service** — semantic search over free-text invoice line descriptions (`ap_invoice_search`), for fuzzy lookups that don't map cleanly to a `WHERE` clause
 - **A Cortex Agent** — Cortex Analyst (text-to-SQL over the semantic view) plus Cortex Search, answering both quantitative and free-text AP questions
+- **A Snowflake-managed MCP server** — `coco.mcp.ap_invoice_mcp` exposes the agent, Cortex Analyst and Cortex Search as 3 MCP tools, connected to Claude (claude.ai custom connector) via Snowflake OAuth as a dedicated user pinned to a narrow read-only role
 - **An evaluation harness** — a 15-question golden set (core / rephrasings / edge cases / deliberately ambiguous / data-validation) scored against the live agent with pass/fail heuristics
 
 ---
@@ -45,6 +46,7 @@ It implements:
 | Structured Q&A | Cortex Analyst | Text-to-SQL tool bound to the semantic view |
 | Unstructured Q&A | Cortex Search | Semantic search over free-text invoice line descriptions |
 | Orchestrating agent | Cortex Agents (REST API) | Wraps the Analyst and Search tools in one conversational interface |
+| AI client access | Snowflake-managed MCP server + Snowflake OAuth | Exposes agent / Analyst / Search as MCP tools to Claude under a least-privilege role |
 | Agent client / eval | Python 3.11, `requests`, `pyyaml` | Calls the Agents REST API and scores answers |
 | Deployment | Bash + Snowflake CLI (`snow sql`) | Applies all SQL in order against a target account |
 
@@ -86,8 +88,13 @@ bronze.sap_ap_   bronze.oracle_   bronze.baan_    bronze.workday_
                               ▼
                    Cortex Agent — ap_invoice_agent
                               │
-                              ▼
-                eval/ harness (15-question golden set)
+                 ┌────────────┴────────────┐
+                 ▼                          ▼
+   eval/ harness (15-question     mcp.ap_invoice_mcp  (Snowflake-managed MCP server:
+   golden set, REST client)        agent + analyst + search tools)
+                                            │  Snowflake OAuth, claude_mcp_user → mcp_claude_role
+                                            ▼
+                                  Claude (claude.ai custom connector)
 ```
 
 | Component | Role |
@@ -98,6 +105,8 @@ bronze.sap_ap_   bronze.oracle_   bronze.baan_    bronze.workday_
 | `sv_ap_analytics` | Semantic View exposing facts/dimensions/metrics to Cortex Analyst |
 | `ap_invoice_search` | Cortex Search service over `line_description`, for fuzzy/semantic invoice lookup |
 | `ap_invoice_agent` | Cortex Agent wrapping the Analyst and Search tools behind one conversational interface |
+| `ap_invoice_mcp` | Snowflake-managed MCP server publishing the agent, Analyst and Search as tools for Claude |
+| `mcp_claude_oauth` / `mcp_claude_role` | OAuth integration + least-privilege role the Claude connector signs in with (read access to Silver + semantic view only) |
 
 ---
 
@@ -118,9 +127,17 @@ snowflake-cortex-ai/
 │   ├── 02_silver/
 │   │   ├── 01_dt_silver_ap_invoices.sql       ← unions all 4 sources per BR-001..BR-009
 │   │   └── 02_dt_vendor_invoice_summary.sql   ← vendor-level rollup + pending/overdue calc
-│   └── 03_semantic_view/
-│       ├── 01_sv_ap_analytics.sql             ← semantic view grounding Cortex Analyst
-│       └── 02_cs_ap_invoice_search.sql        ← Cortex Search service grounding free-text lookup
+│   ├── 03_semantic_view/
+│   │   ├── 01_sv_ap_analytics.sql             ← semantic view grounding Cortex Analyst
+│   │   └── 02_cs_ap_invoice_search.sql        ← Cortex Search service grounding free-text lookup
+│   └── 04_mcp/                                ← manual, run in Snowsight (not part of deploy.sh)
+│       ├── 00_mcp_role_and_user.sql           ← least-privilege role + dedicated Claude user (placeholders only)
+│       ├── 00b_fix_ap_invoice_agent.sql       ← rebuilds the registered agent spec (both tools, MCP-usable warehouse)
+│       ├── 01_mcp_server.sql                  ← Snowflake-managed MCP server with 3 tools
+│       ├── 02_oauth_security_integration.sql  ← Snowflake OAuth client for the claude.ai connector
+│       ├── 03_optional_readonly_sql_server.sql ← optional separate read-only SQL MCP server (not deployed)
+│       ├── 04_verify.sql                      ← read-only checks + builds the connector URL
+│       └── 99_teardown.sql                    ← removes all MCP access
 │
 ├── cortex_agent/
 │   ├── agent_spec.yaml                        ← agent tool spec (Cortex Analyst + Cortex Search)
@@ -140,9 +157,9 @@ snowflake-cortex-ai/
 │   │   └── sample_business_requirements_business_rules.csv
 │   └── dynamic-tables-reference/              ← Dynamic Tables best-practice reference material (plain docs)
 │
-├── cortex_project/                              ← Snowflake CLI declarative project definition, auto-generated by Snowsight Agent Studio
+├── cortex_project/                              ← Snowflake CLI declarative project definition (first generated by Agent Studio, now hand-synced)
 │   ├── cortex-project.yaml                      ← project manifest (artifact → deployment target)
-│   └── ap_invoice_agent.agent.yaml              ← CLI-deployable equivalent of cortex_agent/agent_spec.yaml
+│   └── ap_invoice_agent.agent.yaml              ← live spec of the registered agent (matches sql/04_mcp/00b)
 │
 ├── config/
 │   └── connection.example.toml                ← Snowflake connection template (copy → connection.toml)
@@ -211,6 +228,9 @@ The `cortex_analyst_text_to_sql` tool returns governed SQL rather than executed 
 python eval/run_eval.py
 ```
 
+#### 9. (Optional) Connect the agent to Claude via MCP
+Run the `sql/04_mcp/` scripts in a Snowsight worksheet in order — `00` → `00b` → `01` → `02` → `04` (skip `03`). Fill the password/email placeholders in the worksheet only, never in the file. Then in claude.ai → Settings → Connectors → *Add custom connector*, paste the URL printed by `04_verify.sql` (`https://<account>.snowflakecomputing.com/api/v2/databases/COCO/schemas/MCP/mcp-servers/AP_INVOICE_MCP`) and the OAuth client ID/secret from `02`, then sign in as `claude_mcp_user`. `99_teardown.sql` removes everything.
+
 ---
 
 ## 🧪 Tests
@@ -258,6 +278,14 @@ Apex Staffing Solutions, 100000.00
 ...
 ```
 
+**MCP smoke test — 3/3 tools working from Claude** (2026-10-02, via the claude.ai connector):
+
+| MCP tool | Test question | Result |
+|---|---|---|
+| `ap-invoice-search` | "hydraulic equipment" | Top hits "Hydraulic pumps Q1/Q2 order" |
+| `ap-invoice-analyst` | "Which vendors have the highest total invoice amount?" | Correct `SEMANTIC_VIEW(... METRICS total_spend DIMENSIONS vendor_name)` SQL |
+| `ap-invoice-agent` | "How many invoices per source system, and total spend for each?" | Executed SQL: SAP 15 / Oracle 15 / Baan 10 / Workday 10 = 50; spend kept per currency (BR-002) |
+
 ---
 
 ## ⚠️ Known Limitations
@@ -267,9 +295,10 @@ Apex Staffing Solutions, 100000.00
 - The source data has no paid/unpaid flag — "overdue" is approximated as `due_date < CURRENT_DATE()` — since the sample data is dated 2025, this approximation drifts further from reality the longer the demo sits unrefreshed
 - `eval/metrics.py` checks are heuristic (keyword/shape-based), not semantic — a good answer can fail a check and vice versa; the 2 failing "ambiguous" checks in the results above are scorer gaps, not agent defects
 - No CI pipeline runs `eval/run_eval.py` automatically on change
-- Snowsight's Agent Studio UI and the `DATA_AGENT_RUN` SQL function were both unreliable for testing the registered agent object during development (hung/incomplete tool configuration); `cortex_agent/run_agent.py`'s direct REST client sidesteps this by embedding the full tool spec in each call rather than depending on the registered agent object, and is the supported path for this repo
+- Snowsight's Agent Studio UI and the `DATA_AGENT_RUN` SQL function were both unreliable for testing the registered agent object during development (hung/incomplete tool configuration); `cortex_agent/run_agent.py`'s direct REST client sidesteps this by embedding the full tool spec in each call rather than depending on the registered agent object, and is the path the eval harness uses. The registered agent object itself was later rebuilt in SQL (`sql/04_mcp/00b_fix_ap_invoice_agent.sql`) and is now exercised live through the MCP server
 - The `cortex_analyst_text_to_sql` tool returns governed SQL, not executed results — `run_agent.py` executes that SQL itself via the SQL API rather than relying on the orchestration model to do so
-- `ap_invoice_search` (Cortex Search over `line_description`) is wired into `agent_spec.yaml`, but `run_agent.py`'s result formatting has only been exercised against `cortex_analyst_text_to_sql` responses — its `cortex_search` result handling is an untested generic JSON fallback, not a confirmed-working formatter, until it's actually run live
+- `ap_invoice_search` (Cortex Search over `line_description`) is confirmed working live through the MCP server, but `run_agent.py`'s own result formatting has only been exercised against `cortex_analyst_text_to_sql` responses — its `cortex_search` handling is still an untested generic JSON fallback
+- The MCP connector runs as a dedicated `claude_mcp_user`, because Claude always requests the `session:role:all` OAuth scope and so uses the signed-in user's default role; Cortex usage through the connector is billed to the account like any other Cortex call
 
 ## 🔜 Roadmap
 
