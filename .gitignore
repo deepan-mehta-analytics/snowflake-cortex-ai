@@ -13,8 +13,6 @@ config/connection.toml
 docs/troubleshooting/
 # Ad hoc SHOW/SELECT diagnostic output, not real lab/project content.
 **/schema-check.csv
-# Local unzip of dynamic-tables.zip (already tracked) — temporary extraction for CoCo skill upload.
-labs/coco-foundations/assets/dynamic-tables/
 # Snowsight's default export filenames for ad hoc worksheet results — these
 # have carried real account/user PII (email, login name) during debugging.
 **/Untitled*.csv
@@ -22,6 +20,9 @@ labs/coco-foundations/assets/dynamic-tables/
 **/Autograder_Result*.csv
 # Project-level Claude instructions are private working notes, never public.
 CLAUDE.md
+# Agent session status tracker and its archive — local-only.
+/workflow_status.md
+/workflow_status_archive.md
 
 # ── Python ────────────────────────────────────────────────────
 # Compiled bytecode cache.
