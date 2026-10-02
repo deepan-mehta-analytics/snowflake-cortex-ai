@@ -302,8 +302,9 @@ Apex Staffing Solutions, 100000.00
 
 ## 🔜 Roadmap
 
-- `v0.2.0` — BR-004 data-quality guardrail: flag invoices > $500K USD-equivalent via a Data Metric Function
-- `v0.3.0` — GitHub Actions workflow running `eval/run_eval.py` on every push
+- [x] `v0.2.0` — Snowflake-managed MCP server exposing the agent, Analyst and Search to Claude (shipped 2026-10-02)
+- `v0.3.0` — BR-004 data-quality guardrail: flag invoices > $500K USD-equivalent via a Data Metric Function
+- `v0.4.0` — GitHub Actions workflow running `eval/run_eval.py` on every push
 - `v1.0.0` — Documented, reproducible end-to-end demo with CI-verified eval results
 
 ---
