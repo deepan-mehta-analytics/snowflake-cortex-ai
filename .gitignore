@@ -11,6 +11,8 @@ config/connection.toml
 # ── Internal operational docs ─────────────────────────────────
 # Account-specific debugging narratives, not for the public repo.
 docs/troubleshooting/
+# Account spend log and cost-check queries — local ops doc, not for the public repo.
+docs/cost/
 # Ad hoc SHOW/SELECT diagnostic output, not real lab/project content.
 **/schema-check.csv
 # Snowsight's default export filenames for ad hoc worksheet results — these
