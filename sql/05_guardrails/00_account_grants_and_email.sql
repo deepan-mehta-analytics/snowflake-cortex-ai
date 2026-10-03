@@ -10,6 +10,9 @@
 -- ── Context ──────────────────────────────────────────────────────
 USE ROLE ACCOUNTADMIN;                                                -- account-level grants need ACCOUNTADMIN
 
+-- ── Schemas (coco is ACCOUNTADMIN-owned; SYSADMIN owns its schemas) ──
+GRANT CREATE SCHEMA ON DATABASE coco TO ROLE SYSADMIN;                -- lets SYSADMIN create guardrails + guardrails_test
+
 -- ── Data Metric Functions ────────────────────────────────────────
 GRANT EXECUTE DATA METRIC FUNCTION ON ACCOUNT TO ROLE SYSADMIN;       -- needed to associate + schedule DMFs
 GRANT APPLICATION ROLE SNOWFLAKE.DATA_QUALITY_MONITORING_VIEWER TO ROLE SYSADMIN;  -- read DQ results views
