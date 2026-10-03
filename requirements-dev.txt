@@ -1,0 +1,2 @@
+-r requirements.txt                       # everything the agent client and eval harness need
+snowflake-connector-python>=4.7,<5        # direct SQL checks against the account (PAT auth via config/connection.toml); not used by project scripts

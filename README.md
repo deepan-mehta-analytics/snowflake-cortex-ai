@@ -47,7 +47,8 @@ It implements:
 | Unstructured Q&A | Cortex Search | Semantic search over free-text invoice line descriptions |
 | Orchestrating agent | Cortex Agents (REST API) | Wraps the Analyst and Search tools in one conversational interface |
 | AI client access | Snowflake-managed MCP server + Snowflake OAuth | Exposes agent / Analyst / Search as MCP tools to Claude under a least-privilege role |
-| Agent client / eval | Python 3.11, `requests`, `pyyaml` | Calls the Agents REST API and scores answers |
+| Agent client / eval | Python 3.11 (project `.venv`), `requests`, `pyyaml` | Calls the Agents REST API and scores answers |
+| Direct SQL checks (dev) | `snowflake-connector-python` with PAT auth | Live verification queries; installed via `requirements-dev.txt` |
 | Deployment | Bash + Snowflake CLI (`snow sql`) | Applies all SQL in order against a target account |
 
 ---
@@ -168,6 +169,7 @@ snowflake-cortex-ai/
 │   └── deploy.sh                               ← applies all sql/ files in order via the Snowflake CLI
 │
 ├── requirements.txt                            ← Python deps for the agent client + eval harness
+├── requirements-dev.txt                        ← adds the Snowflake Python connector for direct SQL checks
 └── .gitignore
 ```
 
@@ -192,8 +194,10 @@ source .venv/bin/activate    # macOS/Linux
 
 #### 3. Install Python dependencies
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt        # agent client + eval harness (requests, pyyaml)
+pip install -r requirements-dev.txt    # optional: adds snowflake-connector-python for direct SQL checks
 ```
+Install into the project's `.venv`, not your global Python. The connector pulls in many transitive packages, and a shared global environment makes dependency conflicts hard to attribute. `pip check` inside the venv should report no broken requirements.
 
 #### 4. Configure your Snowflake connection
 ```bash
@@ -292,13 +296,15 @@ Apex Staffing Solutions, 100000.00
 
 - Payment-terms formats differ per source (`NET30` vs `N30` vs `Net 30`) and are intentionally left unnormalized at Silver — an open decision per BR-005, deferred to a future Gold layer
 - GL account codes are not cross-mapped across sources (BR-006) — a unified chart of accounts is a Phase 2 concern, not implemented here
-- The source data has no paid/unpaid flag — "overdue" is approximated as `due_date < CURRENT_DATE()` — since the sample data is dated 2025, this approximation drifts further from reality the longer the demo sits unrefreshed
+- The source data has no paid/unpaid flag — "overdue" is approximated as `due_date < CURRENT_DATE()` — since the sample data is dated 2025, this approximation drifts further from reality the longer the demo sits unrefreshed. By 2026-10-03 it had fully drifted: the live agent counted all 50 invoices as overdue, so overdue-based answers no longer separate vendors meaningfully until the dates are refreshed or a paid flag is added
 - `eval/metrics.py` checks are heuristic (keyword/shape-based), not semantic — a good answer can fail a check and vice versa; the 2 failing "ambiguous" checks in the results above are scorer gaps, not agent defects
 - No CI pipeline runs `eval/run_eval.py` automatically on change
 - Snowsight's Agent Studio UI and the `DATA_AGENT_RUN` SQL function were both unreliable for testing the registered agent object during development (hung/incomplete tool configuration); `cortex_agent/run_agent.py`'s direct REST client sidesteps this by embedding the full tool spec in each call rather than depending on the registered agent object, and is the path the eval harness uses. The registered agent object itself was later rebuilt in SQL (`sql/04_mcp/00b_fix_ap_invoice_agent.sql`) and is now exercised live through the MCP server
 - The `cortex_analyst_text_to_sql` tool returns governed SQL, not executed results — `run_agent.py` executes that SQL itself via the SQL API rather than relying on the orchestration model to do so
 - `ap_invoice_search` (Cortex Search over `line_description`) is confirmed working live through the MCP server, but `run_agent.py`'s own result formatting has only been exercised against `cortex_analyst_text_to_sql` responses — its `cortex_search` handling is still an untested generic JSON fallback
 - The MCP connector runs as a dedicated `claude_mcp_user`, because Claude always requests the `session:role:all` OAuth scope and so uses the signed-in user's default role; Cortex usage through the connector is billed to the account like any other Cortex call
+
+---
 
 ## 🔜 Roadmap
 
