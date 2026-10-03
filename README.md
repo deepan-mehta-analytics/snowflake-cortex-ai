@@ -317,9 +317,32 @@ Apex Staffing Solutions, 100000.00
 
 ## 📂 Dataset
 
-Synthetic AP invoice data (50 invoices across SAP, Oracle, Baan, and Workday; USD/EUR/GBP) plus the accompanying business-requirements CSVs and 15-question evaluation set are sourced from Snowflake's official **[Cortex Code Foundations](https://github.com/hindcraig3/cortex-code-foundations)** workshop — a hands-on lab for Snowflake's Cortex Code (CoCo) AI coding agent. This repo implements the pipeline that workshop describes (Dynamic Tables → Semantic View → Cortex Agent → evaluation framework) as a standalone, version-controlled project. See `docs/business_requirements/README.md` for the rule-by-rule mapping from that workshop's requirements to this repo's SQL, and `docs/dynamic-tables-reference/README.md` for the Dynamic Tables best-practice reference the Silver layer's design follows.
+**Source:** Snowflake's official **[Cortex Code Foundations](https://github.com/hindcraig3/cortex-code-foundations)** workshop, a hands-on lab for Snowflake's Cortex Code (CoCo) AI coding agent. All data is synthetic.
 
-The workshop itself, alongside the other Snowflake Northstar Badge labs, is documented separately in [`snowflake-workshop-labs`](https://github.com/deepan-mehta-analytics/snowflake-workshop-labs).
+**What's included**
+- **AP invoices** — 50 synthetic invoices, each source system keeping its native column shape:
+
+  | Source | Invoices |
+  |---|---|
+  | SAP | 15 |
+  | Oracle | 15 |
+  | Baan | 10 |
+  | Workday | 10 |
+
+- **Currencies** — USD, EUR and GBP, deliberately not converted (BR-002)
+- **Business requirements** — 3 CSVs (source onboarding, column mapping, business rules) that drive the Silver layer's design, in `docs/business_requirements/`
+- **Evaluation set** — 15 golden questions (core, rephrasings, edge cases, deliberately ambiguous, data validation) in `eval/golden_dataset.jsonl`
+
+**How this repo uses it**
+- Implements the pipeline the workshop describes (Dynamic Tables → Semantic View → Cortex Agent → evaluation framework) as a standalone, version-controlled project
+- `docs/business_requirements/README.md` maps each workshop requirement (BR-###) to the SQL that implements it
+- `docs/dynamic-tables-reference/README.md` holds the Dynamic Tables best-practice reference the Silver layer follows
+
+**Caveat**
+- The invoices are dated 2025, so the "overdue" approximation (`due_date < CURRENT_DATE()`) now counts all 50 as overdue (see Known Limitations)
+
+**Related**
+- The workshop itself, alongside the other Snowflake badge labs, is documented separately in [`snowflake-workshop-labs`](https://github.com/deepan-mehta-analytics/snowflake-workshop-labs)
 
 ---
 
