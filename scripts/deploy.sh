@@ -16,6 +16,10 @@ FILES=(
     "02_silver/02_dt_vendor_invoice_summary.sql"                # vendor rollup Dynamic Table
     "03_semantic_view/01_sv_ap_analytics.sql"                    # semantic view grounding Cortex Analyst
     "03_semantic_view/02_cs_ap_invoice_search.sql"               # Cortex Search service grounding free-text lookup
+    "05_guardrails/01_schema_and_fx_rates.sql"                   # BR-004: guardrails schema + indicative FX rates view (needs 05_guardrails/00 grants)
+    "05_guardrails/02_high_value_dmf.sql"                        # BR-004: high-value invoice Data Metric Function
+    "05_guardrails/03_attach_to_silver.sql"                      # BR-004: attach DMF + tolerance expectation to Silver
+    "05_guardrails/04_review_queue_view.sql"                     # BR-004: review queue of flagged invoices
 )
 
 # ── Apply each file in order via the Snowflake CLI ──────────
