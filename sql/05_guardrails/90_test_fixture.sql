@@ -26,7 +26,33 @@ VALUES
     ('TEST-5', 'TEST-INV-5', 'Test Vendor E', '2025-03-02', 396000, 'GBP', 'TEST'),  -- 5: Sun → Fri 1.2603 = 499,078.80 → not
     ('TEST-6', 'TEST-INV-6', 'Test Vendor F', '2025-03-03',   1000, 'XTS', 'TEST');  -- 6: no rate → flagged (fail-safe)
 
--- ── Fixture self-check ───────────────────────────────────────────
+-- ── Edge cases (plan Review Focus 1–5), one invoice_id per case ──
+-- A manual DMF call only accepts a plain "SELECT cols FROM object" argument:
+-- inline VALUES or a WHERE filter fails with a misleading "Invalid argument
+-- types". So the cases live in a table, with one unfiltered view per case.
+CREATE OR REPLACE TABLE guardrails_test.edge_cases_synthetic AS       -- same columns as Silver
+    SELECT * FROM coco.silver.dt_silver_ap_invoices WHERE FALSE;      -- structure only, no rows
+INSERT INTO guardrails_test.edge_cases_synthetic
+    (invoice_id, invoice_number, vendor_name, invoice_date, invoice_amount, currency_code, source_system)
+VALUES
+    ('RF-1',  'RF-INV-1', 'Edge Vendor', '2026-10-01',    1000, 'EUR', 'TEST'),     -- 1: after the last free rate → uses older rate, not flagged
+    ('RF-2',  'RF-INV-2', 'Edge Vendor', '2025-03-03',    1000, 'eur', 'TEST'),     -- 2: lowercase code → no rate → flagged
+    ('RF-3',  'RF-INV-3', 'Edge Vendor', '2025-03-03',    NULL, 'USD', 'TEST'),     -- 3: missing amount → flagged
+    ('RF-4',  'RF-INV-4', 'Edge Vendor', '2025-03-03', -600000, 'USD', 'TEST'),     -- 4: credit note → not flagged
+    ('DUP-1', 'DUP-INV-1', 'Edge Vendor', '2025-03-03', 600000, 'USD', 'SAP'),      -- 5a: same id …
+    ('DUP-1', 'DUP-INV-1', 'Edge Vendor', '2025-03-03', 600000, 'USD', 'ORACLE');   -- 5b: … other system → counted twice
+
+-- ── One unfiltered view per edge case (the shape a DMF call accepts) ──
+CREATE OR REPLACE VIEW guardrails_test.edge_rf_1  AS SELECT * FROM guardrails_test.edge_cases_synthetic WHERE invoice_id = 'RF-1';   -- stale rate
+CREATE OR REPLACE VIEW guardrails_test.edge_rf_2  AS SELECT * FROM guardrails_test.edge_cases_synthetic WHERE invoice_id = 'RF-2';   -- lowercase code
+CREATE OR REPLACE VIEW guardrails_test.edge_rf_3  AS SELECT * FROM guardrails_test.edge_cases_synthetic WHERE invoice_id = 'RF-3';   -- null amount
+CREATE OR REPLACE VIEW guardrails_test.edge_rf_4  AS SELECT * FROM guardrails_test.edge_cases_synthetic WHERE invoice_id = 'RF-4';   -- credit note
+CREATE OR REPLACE VIEW guardrails_test.edge_dup_1 AS SELECT * FROM guardrails_test.edge_cases_synthetic WHERE invoice_id = 'DUP-1';  -- same id, two systems
+
+-- ── Fixture self-checks ──────────────────────────────────────────
 SELECT 'fixture_row_count' AS check_name, 6 AS expected,                                       -- six seeded rows
        (SELECT COUNT(*) FROM guardrails_test.silver_invoices_test_synthetic) AS actual,        -- rows present
        IFF(actual = expected, 'PASS', 'FAIL') AS outcome;                                      -- PASS when seeded once
+SELECT 'edge_case_row_count' AS check_name, 6 AS expected,                                     -- 4 single rows + 2 DUP-1 rows
+       (SELECT COUNT(*) FROM guardrails_test.edge_cases_synthetic) AS actual,                  -- rows present
+       IFF(actual = expected, 'PASS', 'FAIL') AS outcome;
