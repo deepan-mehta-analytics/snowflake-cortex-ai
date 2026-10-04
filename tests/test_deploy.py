@@ -136,3 +136,11 @@ def test_guardrail_attach_leaves_schedule_off():
     """Re-attaching the BR-004 DMF on deploy must not restart daily serverless spend."""
     statements = ["".join(s.split()).upper().rstrip(";") for s in split_statements((ROOT / "sql/05_guardrails/03_attach_to_silver.sql").read_text(encoding="utf-8"))]  # whitespace + trailing ';' removed
     assert statements[-1].endswith("SETDATA_METRIC_SCHEDULE=''")  # last action turns the schedule off
+
+# ── Checklist ─────────────────────────────────────────────────
+def test_checklist_covers_every_checklist_entry():
+    """Every checklist-tagged manifest file is a step in docs/deploy_checklist.md."""
+    text = (ROOT / "docs" / "deploy_checklist.md").read_text(encoding="utf-8")  # the checklist
+    for tag, rel in read_manifest():                         # every manifest entry
+        if tag == "checklist":                               # manual steps only
+            assert rel in text, rel                          # documented
