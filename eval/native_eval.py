@@ -189,6 +189,9 @@ def main(argv=None):
     if args.scores_file:                                           # offline re-gate of an earlier run
         saved = json.loads(Path(args.scores_file).read_text(encoding="utf-8"))  # {"scores": ..., "errors": ...}
         return gate_and_report(rows, saved["scores"], saved["errors"], args)    # same gate path as a live run
+    if not args.record_baseline and not Path(args.baseline).exists():  # gate run with nothing to gate against
+        print(f"infrastructure problem: baseline {args.baseline} not found; record one first", file=sys.stderr)
+        return 2                                                   # stop before spending credits
     dataset = dataset_name(rows)                                   # content-hashed dataset name
     sha = os.environ.get("GITHUB_SHA", "local")[:8]                # commit (or "local")
     suffix = os.environ.get("GITHUB_RUN_ID") or datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S")  # unique per run

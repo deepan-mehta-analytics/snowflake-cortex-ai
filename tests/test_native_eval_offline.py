@@ -162,3 +162,11 @@ def test_summary_prints_on_a_non_utf8_console(tmp_path, monkeypatch):
                     '"per_question": {"q01": {"answer_correctness": 1.0, "logical_consistency": 1.0}}}', encoding="utf-8")
     monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(io.BytesIO(), encoding="cp1252"))  # Windows-style console
     assert main(["--scores-file", str(saved), "--baseline", str(base)]) == 0  # pass, not a crash
+
+def test_missing_baseline_exits_2_before_any_paid_run(tmp_path, monkeypatch):
+    """A gate run with no baseline must stop before connecting — not after a ~$9 evaluation (Task 7 finding)."""
+    import native_eval                                                     # module whose connect() we trap
+    def no_connect():                                                      # any connection attempt fails the test
+        raise AssertionError("connected to Snowflake without a baseline")
+    monkeypatch.setattr(native_eval, "connect", no_connect)                # trap the only network entry point
+    assert main(["--baseline", str(tmp_path / "none.json")]) == 2          # setup problem, caught up front
