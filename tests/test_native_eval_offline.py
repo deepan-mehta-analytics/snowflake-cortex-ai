@@ -151,3 +151,14 @@ def test_uncomputed_row_and_missing_metric_score_zero():
     scores, errors = parse_results([row("Which source system has the most invoices?", None, None)], IDS)
     assert scores["q03"] == {"answer_correctness": 0.0, "logical_consistency": 0.0}  # both gated metrics present
     assert "q03" in errors                                                 # reported as not scored
+
+def test_summary_prints_on_a_non_utf8_console(tmp_path, monkeypatch):
+    """A cp1252 console (Windows) must not crash on the ✅ verdict and turn a pass into exit 1 (seen 2026-10-04)."""
+    import io                                                              # build a cp1252 stdout
+    saved = tmp_path / "run.json"                                          # a run identical to its baseline
+    saved.write_text('{"scores": {"q01": {"answer_correctness": 1.0, "logical_consistency": 1.0}}, "errors": {}}', encoding="utf-8")
+    base = tmp_path / "baseline.json"                                      # same scores as the run
+    base.write_text('{"means": {"answer_correctness": 1.0, "logical_consistency": 1.0}, '
+                    '"per_question": {"q01": {"answer_correctness": 1.0, "logical_consistency": 1.0}}}', encoding="utf-8")
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(io.BytesIO(), encoding="cp1252"))  # Windows-style console
+    assert main(["--scores-file", str(saved), "--baseline", str(base)]) == 0  # pass, not a crash

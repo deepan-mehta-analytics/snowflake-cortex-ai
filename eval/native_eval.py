@@ -176,6 +176,9 @@ def gate_and_report(rows, scores, errors, args):
 
 def main(argv=None):
     """CLI: run, gate (or record a baseline), write summary + results; return 0/1/2."""
+    for stream in (sys.stdout, sys.stderr):                        # Windows consoles default to cp1252
+        if hasattr(stream, "reconfigure"):                         # real text streams support it
+            stream.reconfigure(encoding="utf-8", errors="replace")  # "✅"/"—" must never crash into exit 1
     parser = argparse.ArgumentParser(description=__doc__)          # help text = module docstring
     parser.add_argument("--summary")                               # markdown file to append (CI: $GITHUB_STEP_SUMMARY)
     parser.add_argument("--baseline", default=str(BASELINE_PATH))  # baseline file to gate against / write
