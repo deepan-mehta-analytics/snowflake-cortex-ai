@@ -1,7 +1,8 @@
 -- ══════════════════════════════════════════════════════════════════
 -- 04_mcp / 00b — Rebuild the registered AP invoice agent before MCP
 -- ══════════════════════════════════════════════════════════════════
--- Run after 00_mcp_role_and_user.sql and before 01_mcp_server.sql.
+-- Runs on every deploy (scripts/deploy.py): creates the agent if missing,
+-- then replaces its live spec.
 --
 -- Why: DESCRIBE AGENT showed the registered object never matched
 -- the former cortex_agent/agent_spec.yaml (removed 2026-10-04; run_agent.py
@@ -27,6 +28,14 @@
 -- ── Context ──────────────────────────────────────────────────────
 USE ROLE SYSADMIN;                                                    -- agent owner; owner can modify the live version
 
+-- ── Create on an empty account (no-op when it exists) ────────────
+CREATE AGENT IF NOT EXISTS coco.agent.ap_invoice_agent                -- first deploy only; keeps grants + eval history otherwise
+  FROM SPECIFICATION                                                  -- minimal spec; the ALTER below sets the real one
+  $$
+  models:
+    orchestration: auto
+  $$;
+
 -- ── Replace the live spec with both tools ────────────────────────
 ALTER AGENT coco.agent.ap_invoice_agent                               -- existing object, grants untouched
   MODIFY LIVE VERSION SET SPECIFICATION =                             -- full replacement of the live spec
@@ -34,7 +43,7 @@ ALTER AGENT coco.agent.ap_invoice_agent                               -- existin
   models:
     orchestration: auto
   instructions:
-    response: "Answer concisely. State amounts with their currency; amounts are not converted between USD, EUR and GBP. Say which source systems the answer covers."
+    response: "Answer concisely. State amounts with their currency; amounts are not converted between USD, EUR and GBP. Say which source systems the answer covers. This data is a snapshot as of 2025-06-30 (silver.reporting_calendar): treat 2025-06-30 as today for overdue, recent and other date-relative questions, and say so."
     orchestration: "Use ap_semantic_view for counts, totals, vendors, due dates, overdue amounts and approval status. Use ap_invoice_search to find invoices by what was bought, from the free-text line description."
     sample_questions:
       - question: "Which vendors have the most overdue invoices?"

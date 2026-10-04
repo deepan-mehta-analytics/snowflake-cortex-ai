@@ -110,3 +110,29 @@ def test_sql_runner_prints_box_drawing_on_a_cp1252_console(monkeypatch):
     monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(io.BytesIO(), encoding="cp1252"))  # Windows-style console
     run_sql_checks.use_utf8_output()                         # what main() calls first
     print("-- ══════ header ══════")                         # must not raise UnicodeEncodeError
+
+# ── Reporting date + re-runnability ───────────────────────────
+def test_overdue_logic_never_uses_current_date():
+    """Overdue is measured against silver.reporting_calendar, never the wall clock."""
+    for rel in ("02_silver/02_dt_vendor_invoice_summary.sql", "03_semantic_view/01_sv_ap_analytics.sql"):
+        code = "\n".join(line.split("--", 1)[0] for line in (ROOT / "sql" / rel).read_text(encoding="utf-8").splitlines())  # ignore comments
+        assert "CURRENT_DATE" not in code.upper(), rel           # no wall-clock dependency
+        assert "REPORTING_CALENDAR" in code.upper(), rel         # uses the as-of table
+
+def test_reporting_date_is_2025_06_30_everywhere():
+    """The calendar row, agent spec and Snowflake CLI copy all name the same as-of date."""
+    for rel in ("sql/02_silver/00_reporting_calendar.sql", "sql/04_mcp/00b_fix_ap_invoice_agent.sql", "cortex_project/ap_invoice_agent.agent.yaml"):
+        assert "2025-06-30" in (ROOT / rel).read_text(encoding="utf-8"), rel  # single agreed date
+
+def test_agent_file_splits_into_create_and_alter():
+    """00b creates the agent if missing, then replaces its live spec — both $$ bodies intact."""
+    statements = [s.upper() for s in split_statements((ROOT / "sql/04_mcp/00b_fix_ap_invoice_agent.sql").read_text(encoding="utf-8"))]
+    create = [s for s in statements if s.startswith("CREATE AGENT IF NOT EXISTS")]  # first-run path
+    alter = [s for s in statements if "MODIFY LIVE VERSION SET SPECIFICATION" in s]  # every-run path
+    assert len(create) == 1 and len(alter) == 1                  # exactly one of each
+    assert "AP_INVOICE_SEARCH" in alter[0] and "2025-06-30" in alter[0]  # whole spec in one statement
+
+def test_guardrail_attach_leaves_schedule_off():
+    """Re-attaching the BR-004 DMF on deploy must not restart daily serverless spend."""
+    statements = ["".join(s.split()).upper().rstrip(";") for s in split_statements((ROOT / "sql/05_guardrails/03_attach_to_silver.sql").read_text(encoding="utf-8"))]  # whitespace + trailing ';' removed
+    assert statements[-1].endswith("SETDATA_METRIC_SCHEDULE=''")  # last action turns the schedule off

@@ -4,7 +4,7 @@ USE SCHEMA semantic;                                      -- semantic views live
 -- ── Semantic view: AP analytics ───────────────────────────────────
 -- Grounds Cortex Analyst / the Cortex Agent in business vocabulary rather
 -- than raw table/column names. Facts/dimensions/metrics below are chosen
--- to answer the 15 golden questions in eval/golden_dataset.jsonl (ported
+-- to answer the golden questions in eval/golden_dataset.jsonl (ported
 -- from the reference workshop's AGENT_EVAL_SET).
 -- NOTE: native CREATE SEMANTIC VIEW syntax; adjust table/column names if
 -- your account's Cortex Analyst feature set differs.
@@ -18,7 +18,11 @@ CREATE OR REPLACE SEMANTIC VIEW sv_ap_analytics
         vendor_summary AS silver.dt_vendor_invoice_summary
             PRIMARY KEY (vendor_name)                       -- one row per vendor
             WITH SYNONYMS ('vendor', 'supplier')
-            COMMENT = 'Pre-aggregated vendor-level invoice totals, pending and overdue exposure'
+            COMMENT = 'Pre-aggregated vendor-level invoice totals, pending and overdue exposure',
+        reporting_calendar AS silver.reporting_calendar
+            PRIMARY KEY (as_of_date)                        -- one row
+            WITH SYNONYMS ('as-of date', 'reporting date', 'today')
+            COMMENT = 'Reporting as-of date (2025-06-30): treat as today; overdue = due_date before this date'
     )
 
     FACTS (
@@ -27,7 +31,9 @@ CREATE OR REPLACE SEMANTIC VIEW sv_ap_analytics
           vendor_summary.vendor_total_spend AS total_spend
               COMMENT = 'Lifetime invoiced amount for the vendor across all sources',
           vendor_summary.vendor_total_overdue_amount AS total_overdue_amount
-              COMMENT = 'Amount on the vendor''s invoices past their due date'
+              COMMENT = 'Amount on the vendor''s invoices past due at the reporting as-of date',
+          vendor_summary.vendor_overdue_invoice_count AS overdue_invoice_count
+              COMMENT = 'Number of the vendor''s invoices past due at the reporting as-of date'
       )
 
     DIMENSIONS (
@@ -36,7 +42,8 @@ CREATE OR REPLACE SEMANTIC VIEW sv_ap_analytics
         invoices.approval_status AS approval_status COMMENT = 'Normalized status: APPROVED or PENDING (BR-001)',
         invoices.currency_code AS currency_code COMMENT = 'ISO currency code of the original transaction (USD, EUR, GBP)',
         invoices.invoice_date AS invoice_date COMMENT = 'Date the invoice was issued',
-        invoices.due_date AS due_date COMMENT = 'Date payment is due — an invoice is overdue when this is in the past'
+        invoices.due_date AS due_date COMMENT = 'Date payment is due — an invoice is overdue when this is before the reporting as-of date (reporting_calendar.as_of_date, 2025-06-30), not the current date',
+        reporting_calendar.as_of_date AS as_of_date COMMENT = 'Reporting as-of date of this snapshot (2025-06-30); use it as today'
     )
 
     METRICS (
