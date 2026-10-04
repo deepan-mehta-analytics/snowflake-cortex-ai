@@ -70,3 +70,12 @@ def test_summary_keeps_unicode(tmp_path):
     path = tmp_path / "summary.md"                                         # write like $GITHUB_STEP_SUMMARY
     path.write_text(text, encoding="utf-8")                                # UTF-8 on disk
     assert "—" in path.read_text(encoding="utf-8") and "PASS" in text     # dash survives; verdict shown
+
+def test_summary_escapes_table_breaking_text():
+    """Agent/judge text in notes can't break the markdown table or inject markup (security review)."""
+    result = evaluate_gate(run(0.8, 0.8), BASE)                            # passing run
+    text = render_summary(run(0.8, 0.8), BASE, result, {}, {"q01": "bad | cell\n## injected [link](http://x)"})
+    q01_line = next(line for line in text.splitlines() if line.startswith("| q01"))  # the q01 table row
+    assert q01_line.count("|") == 6                                        # 5 cells → 6 pipes, none from the note
+    assert "\n## injected" not in text                                     # no new heading from the note
+    assert "[link](http://x)" not in text                                  # link markup neutralised

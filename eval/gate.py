@@ -52,6 +52,13 @@ def evaluate_gate(scores, baseline):
     return GateResult(passed=not reasons, reasons=reasons, warnings=warnings, run_means=run_means)
 
 # ── Markdown summary ──────────────────────────────────────────
+def plain_cell(text):
+    """Make untrusted agent/judge text safe inside one markdown table cell: one line, no pipes, no markup."""
+    flat = " ".join(str(text).split())                     # newlines/tabs → single spaces (no new rows or headings)
+    for char in "\\|[]()<>*_`#!":                          # characters that build tables, links, HTML or emphasis
+        flat = flat.replace(char, "\\" + char if char != "|" else "¦")  # pipe → broken bar; others backslash-escaped
+    return flat[:200]                                      # keep cells short
+
 def render_summary(scores, baseline, result, categories, errors):
     """Markdown for the GitHub step summary: verdict, means, per-question table, warnings."""
     verdict = "✅ PASS" if result.passed else "❌ FAIL"     # headline
@@ -62,7 +69,7 @@ def render_summary(scores, baseline, result, categories, errors):
     lines += ["", "| Question | Category | answer_correctness | logical_consistency | Note |", "|---|---|---|---|---|"]  # per-question header
     for qid in sorted(scores):                             # one row per question
         s = scores[qid]                                    # its scores
-        lines.append(f"| {qid} | {categories.get(qid, '')} | {s['answer_correctness']:.2f} | {s['logical_consistency']:.2f} | {errors.get(qid, '')} |")
+        lines.append(f"| {qid} | {categories.get(qid, '')} | {s['answer_correctness']:.2f} | {s['logical_consistency']:.2f} | {plain_cell(errors.get(qid, ''))} |")
     if result.reasons:                                     # failure reasons
         lines += ["", "**Why it failed**"] + [f"- {r}" for r in result.reasons]
     if result.warnings:                                    # per-question notes

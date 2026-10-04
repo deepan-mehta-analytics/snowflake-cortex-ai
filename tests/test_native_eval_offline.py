@@ -138,3 +138,16 @@ def test_scores_file_regression_exits_1_and_missing_baseline_exits_2(tmp_path):
     strict.write_text('{"means": {"answer_correctness": 1.0, "logical_consistency": 1.0}, "per_question": {}}', encoding="utf-8")
     assert main(["--scores-file", str(saved), "--baseline", str(strict)]) == 1  # quality regression
     assert main(["--scores-file", str(saved), "--baseline", str(tmp_path / "none.json")]) == 2  # no baseline
+
+# ── Fail-closed parsing (security review 2026-10-04) ──────────
+def test_missing_metric_status_is_an_error_not_a_pass():
+    """A scored row with no METRIC_STATUS must not be trusted (fail closed)."""
+    scores, errors = parse_results([row("Which source system has the most invoices?", "answer_correctness", 1.0, status=None),
+                                    row("Which source system has the most invoices?", "logical_consistency", 1.0)], IDS)
+    assert scores["q03"]["answer_correctness"] == 0.0 and "q03" in errors  # untrusted score counts as 0
+
+def test_uncomputed_row_and_missing_metric_score_zero():
+    """A row whose METRIC_NAME is empty (not computed, seen live) never becomes a metric; missing metrics count 0."""
+    scores, errors = parse_results([row("Which source system has the most invoices?", None, None)], IDS)
+    assert scores["q03"] == {"answer_correctness": 0.0, "logical_consistency": 0.0}  # both gated metrics present
+    assert "q03" in errors                                                 # reported as not scored

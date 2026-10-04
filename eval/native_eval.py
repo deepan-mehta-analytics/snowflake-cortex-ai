@@ -21,7 +21,7 @@ from pathlib import Path                     # file paths
 import snowflake.connector                   # Snowflake Python connector (requirements-dev.txt)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # import gate.py from eval/
-from gate import evaluate_gate, means, render_summary     # noqa: E402 — pure gate (Task 2), after the path insert
+from gate import METRICS, evaluate_gate, means, render_summary  # noqa: E402 — pure gate (Task 2), after the path insert
 
 # ── Paths and names ───────────────────────────────────────────
 EVAL_DIR = Path(__file__).resolve().parent                    # eval/
@@ -59,14 +59,26 @@ def parse_results(rows, id_by_question):
     scores, errors = {}, {}                                            # outputs
     for r in rows:                                                     # one row per (record, metric)
         qid = id_by_question[r["INPUT"]]                               # KeyError names an unknown question
+        scores.setdefault(qid, {})                                     # every returned question gets a score entry
+        if r.get("METRIC_NAME") not in METRICS:                        # not computed yet (seen live) or an ungated metric
+            continue                                                   # never becomes a metric key; filled with 0 below
         score = r["EVAL_AGG_SCORE"]                                    # judge score (0.0–1.0, verified live)
-        status = json.loads(r.get("METRIC_STATUS") or '{"code": 200}')  # judge outcome, e.g. {"code": 400, "message": ...}
+        try:
+            status = json.loads(r.get("METRIC_STATUS") or "{}")        # judge outcome, e.g. {"code": 200, "message": "Ok"}
+        except (TypeError, ValueError):                                # unreadable status → untrusted
+            status = {}                                                # fail closed below
         if r.get("ERROR"):                                             # the agent failed on this record
             errors[qid] = str(r["ERROR"])[:200]                        # keep a short reason for the summary
-        elif status.get("code") != 200:                                # the judge failed: its 0.0 is not a real score
-            errors[qid] = f"{r['METRIC_NAME']}: {status.get('message', 'judge failed')}"[:200]  # reason for the summary
-            score = None                                               # treat like an errored record
-        scores.setdefault(qid, {})[r["METRIC_NAME"]] = float(score) if score is not None else 0.0  # errors count as 0
+            score = None                                               # count as 0
+        elif status.get("code") != 200:                                # judge failed or no status: its score isn't trusted
+            errors[qid] = f"{r['METRIC_NAME']}: {status.get('message', 'no judge status')}"[:200]  # reason for the summary
+            score = None                                               # fail closed: count as 0
+        scores[qid][r["METRIC_NAME"]] = float(score) if score is not None else 0.0  # errors count as 0
+    for qid, metrics in scores.items():                                # every question must carry every gated metric
+        for metric in METRICS:                                         # answer_correctness, logical_consistency
+            if metric not in metrics:                                  # judge never scored it
+                metrics[metric] = 0.0                                  # fail closed
+                errors.setdefault(qid, f"{metric}: not scored")        # say why, unless a reason is already recorded
     return scores, errors                                              # per-question scores + error notes
 
 # ── Live section ──────────────────────────────────────────────
