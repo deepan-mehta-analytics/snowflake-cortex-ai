@@ -1,0 +1,79 @@
+{
+  "recorded": "2026-10-04",
+  "run_name": "ci-local-20261004112645",
+  "recorded_by": "local dress rehearsal as SYSADMIN (same agent, dataset and v3 judge as CI)",
+  "means": {
+    "answer_correctness": 0.9418,
+    "logical_consistency": 0.9806
+  },
+  "per_question": {
+    "q01": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q02": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q03": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q04": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q05": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q06": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q07": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q08": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q09": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q10": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q11": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q12": {
+      "answer_correctness": 0.67,
+      "logical_consistency": 1.0
+    },
+    "q13": {
+      "answer_correctness": 0.67,
+      "logical_consistency": 1.0
+    },
+    "q14": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q15": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q16": {
+      "answer_correctness": 0.67,
+      "logical_consistency": 0.67
+    },
+    "q17": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    }
+  }
+}

@@ -1,0 +1,69 @@
+# Live CI: native Cortex Agent Evaluation of COCO.AGENT.AP_INVOICE_AGENT, gated against eval/baseline.json.
+name: Live eval
+
+on:
+  # Only pushes to main that can change agent behaviour or the eval itself.
+  push:
+    branches: [main]
+    paths:
+      - "sql/**"
+      - "cortex_agent/**"
+      - "cortex_project/**"
+      - "eval/**"
+      - ".github/workflows/live-eval.yml"
+  # Manual run from the Actions tab (optionally re-recording the baseline).
+  workflow_dispatch:
+    inputs:
+      record_baseline:
+        description: "Record eval/baseline.json instead of gating"
+        type: boolean
+        default: false
+
+# Read-only token: this workflow never writes to the repo.
+permissions:
+  contents: read
+
+# One live run at a time; a newer push cancels the older run (saves credits).
+concurrency:
+  group: live-eval
+  cancel-in-progress: true
+
+jobs:
+  native-eval:
+    # Repo variable switch: set LIVE_EVAL_ENABLED=false after the trial ends (2026-11-11) → job skipped, not red.
+    if: vars.LIVE_EVAL_ENABLED == 'true'
+    # GitHub-hosted Linux runner.
+    runs-on: ubuntu-latest
+    # A 17-question run takes ~10 minutes; 30 leaves headroom for queueing.
+    timeout-minutes: 30
+    # Connection settings for native_eval.py (CI service user, role-restricted PAT).
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_PAT: ${{ secrets.SNOWFLAKE_PAT }}
+      SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER }}
+    steps:
+      # Fetch the repository.
+      - uses: actions/checkout@v5
+      # Python 3.11 with pip cache.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      # Connector + pyyaml come from the dev requirements.
+      - run: pip install -r requirements-dev.txt
+      # Gate run (default) — exit 1 = quality regression, 2 = infrastructure.
+      - if: ${{ !inputs.record_baseline }}
+        run: python eval/native_eval.py --summary "$GITHUB_STEP_SUMMARY"
+      # Baseline run (manual only) — writes eval/baseline.json for review and commit.
+      - if: ${{ inputs.record_baseline }}
+        run: python eval/native_eval.py --record-baseline
+      # Keep the per-question results (and the baseline when recorded) for 30 days.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-eval-results
+          path: |
+            eval/results/native_*.json
+            eval/baseline.json
+          retention-days: 30
+          if-no-files-found: ignore
