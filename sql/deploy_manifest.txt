@@ -1,0 +1,27 @@
+# Deploy order for scripts/deploy.py (paths relative to sql/).
+# deploy    = run by `python scripts/deploy.py --apply` as SYSADMIN (re-runnable)
+# checklist = run by hand in Snowsight — see docs/deploy_checklist.md (needs ACCOUNTADMIN or secrets)
+checklist 00_setup/00_database_schema_warehouse.sql
+checklist 05_guardrails/00_account_grants_and_email.sql
+checklist 04_mcp/00_mcp_role_and_user.sql
+checklist 06_ci/00_ci_eval_role_and_user.sql
+deploy    01_bronze_sources/01_sap_ap_invoices.sql
+deploy    01_bronze_sources/02_oracle_ap_invoices.sql
+deploy    01_bronze_sources/03_baan_ap_invoices.sql
+deploy    01_bronze_sources/04_workday_ap_invoices.sql
+deploy    02_silver/00_reporting_calendar.sql
+deploy    02_silver/01_dt_silver_ap_invoices.sql
+deploy    02_silver/02_dt_vendor_invoice_summary.sql
+deploy    03_semantic_view/01_sv_ap_analytics.sql
+deploy    03_semantic_view/02_cs_ap_invoice_search.sql
+deploy    04_mcp/00b_fix_ap_invoice_agent.sql
+deploy    05_guardrails/01_schema_and_fx_rates.sql
+deploy    05_guardrails/02_high_value_dmf.sql
+deploy    05_guardrails/03_attach_to_silver.sql
+deploy    05_guardrails/04_review_queue_view.sql
+deploy    06_ci/01_eval_objects.sql
+checklist 90_grants.sql
+checklist 04_mcp/01_mcp_server.sql
+checklist 04_mcp/02_oauth_security_integration.sql
+checklist 05_guardrails/05_email_alert.sql
+checklist 00_setup/01_github_git_integration.sql
