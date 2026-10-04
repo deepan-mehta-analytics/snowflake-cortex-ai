@@ -1,130 +1,92 @@
 """Minimal client for the Snowflake Cortex Agents REST API.
 
-Exercises the agent defined in agent_spec.yaml against a single
-natural-language question. The cortex_analyst_text_to_sql tool returns
-governed SQL rather than executed results, so this client executes that SQL
-itself via the SQL API and prints the interpretation plus real rows.
+Sends a single natural-language question to the registered agent object
+COCO.AGENT.AP_INVOICE_AGENT — the same agent the MCP server exposes to
+Claude. The agent's model, tools and instructions live in Snowflake
+(synced copy: cortex_project/ap_invoice_agent.agent.yaml), with the
+orchestration model on `auto`, so a retired model can't break this client.
+
+The agent runs its generated SQL itself (execution_environment on
+WH_COCO_PIPELINE) and streams the current agent event schema: named SSE
+events ending in one `response` event that carries the full message. This
+client reads that final message and prints its text plus any result tables.
 """
 
 # ── Imports ───────────────────────────────────────────────────
 import os                                    # read account/token config from environment variables
 import sys                                   # read the question from argv and exit with proper codes
-import json                                  # build request bodies and parse streamed/response JSON
-import datetime                              # convert SQL API's raw epoch-day DATE values to calendar dates
-import yaml                                  # load agent_spec.yaml into a Python dict
-import requests                              # issue HTTPS requests to the Cortex Agents and SQL APIs
+import json                                  # parse each SSE data payload
+import datetime                              # convert raw epoch-day DATE values to calendar dates
+import requests                              # issue HTTPS requests to the Cortex Agents API
 
-EPOCH = datetime.date(1970, 1, 1)            # SQL API returns DATE columns as days since this epoch
-
-# ── Configuration ─────────────────────────────────────────────
-SNOWFLAKE_ACCOUNT = os.environ["SNOWFLAKE_ACCOUNT"]              # e.g. "xy12345.us-east-1" — required, no default
-SNOWFLAKE_PAT = os.environ["SNOWFLAKE_PAT"]                      # programmatic access token used for auth
-AGENT_SPEC_PATH = os.path.join(os.path.dirname(__file__), "agent_spec.yaml")  # co-located spec file
-AGENT_ENDPOINT = f"https://{SNOWFLAKE_ACCOUNT}.snowflakecomputing.com/api/v2/cortex/agent:run"  # agent REST endpoint
-SQL_ENDPOINT = f"https://{SNOWFLAKE_ACCOUNT}.snowflakecomputing.com/api/v2/statements"          # SQL API endpoint
+# ── Constants ─────────────────────────────────────────────────
+EPOCH = datetime.date(1970, 1, 1)                                # result sets return DATE cells as days since this epoch
+AGENT_PATH = "/api/v2/databases/COCO/schemas/AGENT/agents/AP_INVOICE_AGENT:run"  # run the registered agent object
+REQUEST_TIMEOUT = (10, 120)                                      # (connect, read) seconds — a stalled call fails instead of hanging
+NO_ANSWER = "(no answer or tool result returned)"                # explicit placeholder when the message has nothing usable
 
 # ── Shared auth headers ──────────────────────────────────────────
-def auth_headers(accept: str) -> dict:
-    """Build the PAT-based auth headers shared by both REST calls."""
+def auth_headers(pat: str) -> dict:
+    """Build the PAT-based auth headers for the streaming agent call."""
     return {
-        "Authorization": f"Bearer {SNOWFLAKE_PAT}",             # PAT-based auth against the REST API
+        "Authorization": f"Bearer {pat}",                       # PAT-based auth against the REST API
         "X-Snowflake-Authorization-Token-Type": "PROGRAMMATIC_ACCESS_TOKEN",  # tells Snowflake the bearer token is a PAT, not OAuth/session
         "Content-Type": "application/json",                    # request body is JSON
-        "Accept": accept,                                       # SSE for the agent, plain JSON for the SQL API
+        "Accept": "text/event-stream",                          # the agent streams server-sent events
     }
 
-# ── Load agent spec ───────────────────────────────────────────
-def load_agent_spec() -> dict:
-    """Read agent_spec.yaml and return it as a plain dict."""
-    with open(AGENT_SPEC_PATH, "r", encoding="utf-8") as f:  # open the YAML spec for reading
-        return yaml.safe_load(f)                              # parse YAML into a Python dict
-
-# ── Execute governed SQL ─────────────────────────────────────────
-def execute_sql(sql: str, warehouse: str) -> tuple:
-    """Run SQL via the SQL API and return (column_names, rows)."""
-    body = {"statement": sql, "warehouse": warehouse.upper(), "database": "COCO"}  # SQL API needs the exact-cased (uppercase) object name here, unlike inside a SQL statement
-    resp = requests.post(SQL_ENDPOINT, headers=auth_headers("application/json"), json=body)  # synchronous SQL API call
-    if not resp.ok:
-        print(f"DEBUG: SQL API error body: {resp.text}", file=sys.stderr)  # surface the exact error detail before raising
-    resp.raise_for_status()                                     # fail loudly on non-2xx before parsing anything
-    result = resp.json()                                        # parse the SQL API's JSON response
-    row_types = result["resultSetMetaData"]["rowType"]           # per-column name + type metadata
-    columns = [col["name"] for col in row_types]                  # extract column names in order
-    rows = []                                                      # accumulate type-formatted rows
-    for raw_row in result.get("data", []):                        # walk each raw row (list of string cell values)
-        formatted_row = []                                         # accumulate this row's formatted cells
-        for col, value in zip(row_types, raw_row):                # pair each cell with its column's type metadata
-            if value is not None and col["type"] == "date":        # DATE cells arrive as a raw epoch-day string
+# ── Format one result table ─────────────────────────────────────
+def format_table(table: dict) -> str:
+    """Render a `table` content item as a title, a header row and one line per row."""
+    result_set = table.get("result_set", {})                     # executed query result in SQL API jsonv2 shape
+    row_types = result_set.get("resultSetMetaData", {}).get("rowType", [])  # per-column name + type metadata
+    lines = [table["title"]] if table.get("title") else []        # optional table title from the agent
+    lines.append(", ".join(col["name"] for col in row_types))     # header row
+    for raw_row in result_set.get("data", []):                    # each raw row is a list of string cells
+        cells = []                                                 # this row's formatted cells
+        for col, value in zip(row_types, raw_row):                 # pair each cell with its column's type
+            if col.get("type") == "date" and str(value).isdigit():  # epoch-day string (SQL API style); ISO dates pass through
                 value = (EPOCH + datetime.timedelta(days=int(value))).isoformat()  # convert to YYYY-MM-DD
-            formatted_row.append(value)
-        rows.append(formatted_row)
-    return columns, rows                                         # hand back both for formatting
+            cells.append(str(value))                                # keep every cell as text
+        lines.append(", ".join(cells))                              # one output line per row
+    return "\n".join(lines)                                         # the whole table as text
+
+# ── Parse the final agent message ────────────────────────────────
+def parse_final_response(message: dict) -> str:
+    """Turn the final `response` event's message into printable text (text first, then tables)."""
+    texts = []                                                     # answer text blocks, in order
+    tables = []                                                    # formatted result tables, in order
+    for item in message.get("content", []):                        # walk every content item in the message
+        if item.get("type") == "text":                             # final answer text (thinking items are skipped)
+            texts.append(item.get("text", ""))                     # keep the text block
+        elif item.get("type") == "table":                          # rows from SQL the agent executed itself
+            tables.append(format_table(item.get("table", {})))     # keep the formatted table
+    parts = ["".join(texts).strip()] + tables                       # text first, then each table
+    answer = "\n\n".join(part for part in parts if part)            # drop empty parts
+    return answer or NO_ANSWER                                       # never return an empty string
 
 # ── Call the agent ────────────────────────────────────────────
 def run_agent(question: str) -> str:
-    """Send one question to the agent and return a formatted answer."""
-    spec = load_agent_spec()                                   # load tool/model config from agent_spec.yaml
-    warehouse = spec["tool_resources"]["ap_semantic_view"]["warehouse"]  # warehouse used to execute any generated SQL
-
-    payload = {
-        "model": spec["models"]["orchestration"],               # orchestration model from the spec
+    """Send one question to the registered agent and return its formatted answer."""
+    account = os.environ["SNOWFLAKE_ACCOUNT"]                      # e.g. "xy12345-ab12345" — required, no default
+    pat = os.environ["SNOWFLAKE_PAT"]                              # programmatic access token used for auth
+    url = f"https://{account}.snowflakecomputing.com{AGENT_PATH}"   # full agent:run URL for this account
+    payload = {                                                    # model, tools and instructions come from the agent object
         "messages": [{"role": "user", "content": [{"type": "text", "text": question}]}],  # single-turn question
-        "tools": spec["tools"],                                 # tool specs (semantic view + search) from the spec
-        "tool_resources": spec["tool_resources"],               # concrete resources each tool binds to
     }
+    response = requests.post(url, headers=auth_headers(pat), json=payload, stream=True, timeout=REQUEST_TIMEOUT)  # open the stream
+    response.raise_for_status()                                    # fail loudly on non-2xx before parsing anything
+    response.encoding = "utf-8"                                    # SSE has no charset header; requests would assume ISO-8859-1 and garble "—"
 
-    response = requests.post(AGENT_ENDPOINT, headers=auth_headers("text/event-stream"), json=payload, stream=True)  # open streaming request
-    response.raise_for_status()                                 # fail loudly on non-2xx before parsing anything
-
-    final_text_parts = []                                       # accumulate text deltas across the SSE stream
-    generated_sql = None                                        # SQL surfaced by the cortex_analyst_text_to_sql tool, if any
-    sql_interpretation = None                                   # the tool's plain-English restatement of the question
-    other_tool_results = []                                     # raw fallback for tool results in an unrecognized shape (e.g. cortex_search, untested here)
-
-    for line in response.iter_lines(decode_unicode=True):        # iterate over each SSE line as it arrives
-        if not line or not line.startswith("data: "):           # skip keep-alive/blank lines
-            continue
-        raw = line[len("data: "):]                               # payload after the "data: " prefix
-        if raw == "[DONE]":                                       # standard SSE terminal sentinel, not an event
-            continue
-        try:
-            event = json.loads(raw)                              # parse the JSON payload
-        except json.JSONDecodeError:
-            continue                                              # skip any other non-JSON control lines
-
-        for delta in event.get("delta", {}).get("content", []):  # walk content deltas in this event
-            delta_type = delta.get("type")                        # e.g. "text", "tool_use", "tool_results"
-            if delta_type == "text":                              # plain-text answer chunk from the orchestration model
-                final_text_parts.append(delta.get("text", ""))    # append this chunk to the running answer
-            elif delta_type == "tool_results":                    # result of a tool call (e.g. generated SQL)
-                for item in delta.get("tool_results", {}).get("content", []):  # walk this tool's result content
-                    if item.get("type") == "json":                # structured tool result payload
-                        payload_json = item.get("json", {})       # the tool-specific payload
-                        if "sql" in payload_json:                  # recognized shape: cortex_analyst_text_to_sql
-                            generated_sql = payload_json.get("sql")   # governed SQL generated from the semantic view
-                            sql_interpretation = payload_json.get("text")  # the tool's restated interpretation of the question
-                        else:                                       # unrecognized shape (e.g. cortex_search) — don't silently drop it
-                            other_tool_results.append(json.dumps(payload_json, indent=2))
-
-    answer = "".join(final_text_parts)                            # prefer a direct text answer if the model gave one
-    if answer:                                                    # orchestration model produced its own summary
-        return answer
-
-    if generated_sql:                                             # no text answer, but the tool returned SQL — run it
-        columns, rows = execute_sql(generated_sql, warehouse)      # execute the governed SQL to get real results
-        lines = []                                                 # accumulate formatted output lines
-        if sql_interpretation:                                     # include the tool's restated question, if given
-            lines.append(sql_interpretation)
-            lines.append("")
-        lines.append(", ".join(columns))                           # header row
-        for row in rows:                                           # one line per result row
-            lines.append(", ".join(str(value) for value in row))
-        return "\n".join(lines)
-
-    if other_tool_results:                                        # unrecognized tool result shape (e.g. cortex_search) — raw fallback
-        return "\n\n".join(other_tool_results)
-
-    return "(no answer or tool result returned)"                  # neither a text answer nor a tool result arrived
+    event_name = None                                              # name of the SSE event the next data line belongs to
+    for line in response.iter_lines(decode_unicode=True):          # iterate over each SSE line as it arrives
+        if line.startswith("event: "):                             # an event name line precedes its data line
+            event_name = line[len("event: "):]                     # remember which event is next
+        elif line.startswith("data: ") and event_name == "response":  # the final message with the full content list
+            return parse_final_response(json.loads(line[len("data: "):]))  # parse and return it
+        elif line.startswith("data: ") and event_name == "error":  # the agent reported an error mid-stream
+            raise RuntimeError(f"agent error: {line[len('data: '):]}")  # surface it instead of returning nothing
+    return NO_ANSWER                                                # the stream ended without a final message
 
 # ── Entry point ───────────────────────────────────────────────
 if __name__ == "__main__":

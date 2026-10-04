@@ -4,7 +4,8 @@
 -- Run after 00_mcp_role_and_user.sql and before 01_mcp_server.sql.
 --
 -- Why: DESCRIBE AGENT showed the registered object never matched
--- cortex_agent/agent_spec.yaml — Agent Studio's save bug (2026-07-16)
+-- the former cortex_agent/agent_spec.yaml (removed 2026-10-04; run_agent.py
+-- now runs this object directly) — Agent Studio's save bug (2026-07-16)
 -- left it with only the Analyst tool (no Cortex Search tool), no
 -- instructions, and generated SQL running on COMPUTE_WH, a warehouse
 -- mcp_claude_role cannot use. Through MCP every agent call would fail.
