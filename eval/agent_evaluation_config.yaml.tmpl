@@ -1,0 +1,21 @@
+dataset:
+  dataset_type: "CORTEX AGENT"
+  table_name: "{table}"
+  dataset_name: "{dataset}"
+  column_mapping:
+    query_text: "QUERY_TEXT"
+    ground_truth: "GROUND_TRUTH"
+evaluation:
+  agent_params:
+    agent_name: "COCO.AGENT.AP_INVOICE_AGENT"
+    agent_type: "CORTEX AGENT"
+  run_params:
+    label: "{label}"
+  source_metadata:
+    type: "dataset"
+    dataset_name: "{dataset}"
+metrics:
+  - name: "answer_correctness"
+    version: "v3"
+  - name: "logical_consistency"
+    version: "v3"
