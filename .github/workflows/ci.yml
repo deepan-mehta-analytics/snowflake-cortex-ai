@@ -1,0 +1,33 @@
+# Offline CI: lint + unit tests on every push and pull request (no secrets, no Snowflake).
+name: CI
+
+# Run on every push and every pull request.
+on:
+  push:
+  pull_request:
+
+# Read-only token: this workflow never writes to the repo.
+permissions:
+  contents: read
+
+jobs:
+  # Single offline job: lint, then unit tests.
+  offline:
+    # GitHub-hosted Linux runner.
+    runs-on: ubuntu-latest
+    # Fail fast if anything hangs; the suite takes seconds.
+    timeout-minutes: 10
+    steps:
+      # Fetch the repository.
+      - uses: actions/checkout@v5
+      # Same Python as local development (3.11), with pip download cache.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      # Dev requirements include requests, the connector (imported by native_eval), pytest, ruff, pyyaml.
+      - run: pip install -r requirements-dev.txt
+      # Lint with the pinned ruff.
+      - run: ruff check .
+      # Offline tests only (tests/ never touches the network).
+      - run: pytest tests/ -v
