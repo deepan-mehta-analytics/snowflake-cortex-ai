@@ -20,6 +20,7 @@ FILES=(
     "05_guardrails/02_high_value_dmf.sql"                        # BR-004: high-value invoice Data Metric Function
     "05_guardrails/03_attach_to_silver.sql"                      # BR-004: attach DMF + tolerance expectation to Silver
     "05_guardrails/04_review_queue_view.sql"                     # BR-004: review queue of flagged invoices
+    "06_ci/01_eval_objects.sql"                                  # v0.4.0: eval schema, golden-question table, config stage
 )
 
 # ── Apply each file in order via the Snowflake CLI ──────────
