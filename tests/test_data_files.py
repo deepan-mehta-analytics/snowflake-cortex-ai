@@ -16,7 +16,7 @@ def load_rows():
 def test_rows_parse_and_ids_are_unique():
     """17 rows, each with a unique id."""
     ids = [row["id"] for row in load_rows()]            # every question id
-    assert len(ids) == 17                               # 15 original + q16 (Cortex Search) + q17 (hallucination trap)
+    assert len(ids) == 19                               # 15 original + q16 search + q17 hallucination trap + q18 overdue as-of + q19 as-of date
     assert len(set(ids)) == len(ids)                    # no duplicate ids
 
 def test_every_row_has_ground_truth_output():
