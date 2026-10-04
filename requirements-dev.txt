@@ -1,3 +1,5 @@
 -r requirements.txt                       # everything the agent client and eval harness need
 snowflake-connector-python>=4.7,<5        # direct SQL checks against the account (PAT auth via config/connection.toml); not used by project scripts
 pytest==8.4.2                             # offline unit tests in tests/ (run locally and in CI)
+ruff==0.13.3                              # Python linter used locally and by ci.yml
+pyyaml>=6.0                               # renders/validates the evaluation config YAML (native_eval.py, tests)
