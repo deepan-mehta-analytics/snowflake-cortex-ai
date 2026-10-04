@@ -13,6 +13,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent                # scripts/ →
 CONFIG_PATH = REPO_ROOT / "config" / "connection.toml"            # gitignored connection file
 
 
+def use_utf8_output():                                            # Windows consoles default to cp1252
+    for stream in (sys.stdout, sys.stderr):                       # both output streams
+        if hasattr(stream, "reconfigure"):                        # real text streams support it
+            stream.reconfigure(encoding="utf-8", errors="replace")  # "═" in SQL headers must never crash a check run
+
+
 def load_settings(connection_name):                               # read one [connections.<name>] block
     with open(CONFIG_PATH, "rb") as config_file:                  # TOML must be opened in binary mode
         return tomllib.load(config_file)["connections"][connection_name]  # dict of connection settings
@@ -40,6 +46,7 @@ def run_once(connection, sql_text):                               # execute ever
 
 
 def main():                                                       # CLI entry point
+    use_utf8_output()                                             # safe printing on any console
     parser = argparse.ArgumentParser(description=__doc__)         # help text = module docstring
     parser.add_argument("sql_file")                               # path to the .sql file to run
     parser.add_argument("--connection", default="default")        # [connections.<name>] block to use

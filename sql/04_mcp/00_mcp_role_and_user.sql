@@ -23,20 +23,10 @@ GRANT ROLE mcp_claude_role TO ROLE SYSADMIN;                          -- keep th
 USE ROLE ACCOUNTADMIN;                                                -- SNOWFLAKE database roles are granted by ACCOUNTADMIN
 GRANT DATABASE ROLE SNOWFLAKE.CORTEX_AGENT_USER TO ROLE mcp_claude_role;  -- required to invoke Cortex Agents (docs: Agent-based MCP server)
 
--- ── Compute + container access ───────────────────────────────────
-USE ROLE SECURITYADMIN;                                               -- back to the grant administrator for object grants
-GRANT USAGE ON WAREHOUSE wh_coco_pipeline TO ROLE mcp_claude_role;    -- X-Small project warehouse runs the agent's generated SQL
-GRANT USAGE ON DATABASE coco TO ROLE mcp_claude_role;                 -- allows resolving objects inside the project database
-GRANT USAGE ON SCHEMA coco.agent TO ROLE mcp_claude_role;             -- schema holding the Cortex Agent and Cortex Search service
-GRANT USAGE ON SCHEMA coco.semantic TO ROLE mcp_claude_role;          -- schema holding the semantic view
-GRANT USAGE ON SCHEMA coco.silver TO ROLE mcp_claude_role;            -- schema holding the Silver Dynamic Tables the agent queries
-
--- ── Tool-level privileges (MCP server access ≠ tool access) ──────
-GRANT USAGE ON AGENT coco.agent.ap_invoice_agent TO ROLE mcp_claude_role;  -- invoke the AP invoice Cortex Agent tool
-GRANT USAGE ON CORTEX SEARCH SERVICE coco.agent.ap_invoice_search TO ROLE mcp_claude_role;  -- invoke the line-description search tool
-GRANT SELECT ON SEMANTIC VIEW coco.semantic.sv_ap_analytics TO ROLE mcp_claude_role;  -- invoke the Cortex Analyst tool over the semantic view
-GRANT SELECT ON DYNAMIC TABLE coco.silver.dt_silver_ap_invoices TO ROLE mcp_claude_role;  -- read access for SQL generated from the semantic view
-GRANT SELECT ON DYNAMIC TABLE coco.silver.dt_vendor_invoice_summary TO ROLE mcp_claude_role;  -- read access for vendor rollup queries
+-- ── Object grants ────────────────────────────────────────────────
+-- Moved to sql/90_grants.sql (v1.0.0): they need the objects to exist, so
+-- they run after `scripts/deploy.py --apply` — see docs/deploy_checklist.md.
+-- (MCP server access ≠ tool access: 90 grants the tool-level privileges.)
 
 -- ── Dedicated Claude user ────────────────────────────────────────
 USE ROLE USERADMIN;                                                   -- user administrator creates users

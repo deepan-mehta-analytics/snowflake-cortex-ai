@@ -83,3 +83,30 @@ def test_apply_stops_at_first_error_and_names_it(capsys):
     out = capsys.readouterr().out                            # printed report
     assert "FAILED 06_ci/01_eval_objects.sql statement 3" in out  # exact location
     assert len(cursor.ran) == 2                              # nothing after the failure ran
+
+# ── Grants placement ──────────────────────────────────────────
+def test_deploy_files_hold_no_object_grants():
+    """Object grants to the MCP/CI roles live in 90_grants.sql, never in deploy-tagged files."""
+    for tag, rel in read_manifest():                         # every manifest entry
+        if tag != "deploy":                                  # only files deploy.py runs
+            continue
+        text = (ROOT / "sql" / rel).read_text(encoding="utf-8").upper()  # case-insensitive scan
+        assert "TO ROLE MCP_CLAUDE_ROLE" not in text, rel    # MCP grants belong in 90
+        assert "TO ROLE CI_EVAL_ROLE" not in text, rel       # CI grants belong in 90
+
+def test_role_scripts_hold_no_object_grants_and_no_pat():
+    """Role/user scripts keep only role, user and account-level grants (re-runnable on an empty account)."""
+    for rel in ("04_mcp/00_mcp_role_and_user.sql", "06_ci/00_ci_eval_role_and_user.sql"):
+        text = (ROOT / "sql" / rel).read_text(encoding="utf-8").upper()  # scan
+        for needle in (" ON DYNAMIC TABLE ", " ON SEMANTIC VIEW ", " ON CORTEX SEARCH SERVICE ", " ON AGENT ", " ON STAGE ", " ON TABLE "):
+            assert needle not in text, f"{rel}: {needle.strip()}"  # moved to 90_grants.sql
+        assert "ADD PROGRAMMATIC ACCESS TOKEN" not in text, rel  # one-time step lives in the checklist
+
+# ── Console encoding (Windows) ────────────────────────────────
+def test_sql_runner_prints_box_drawing_on_a_cp1252_console(monkeypatch):
+    """run_sql_checks prints '═' headers; a cp1252 console must not crash it (seen 2026-10-04, Task 2)."""
+    import io                                                # build a cp1252 stdout
+    import run_sql_checks                                    # module under test (scripts/ is on sys.path)
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(io.BytesIO(), encoding="cp1252"))  # Windows-style console
+    run_sql_checks.use_utf8_output()                         # what main() calls first
+    print("-- ══════ header ══════")                         # must not raise UnicodeEncodeError
