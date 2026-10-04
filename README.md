@@ -4,9 +4,9 @@
 
 This pipeline ingests accounts-payable invoices from four disconnected ERP/AP systems — SAP, Oracle, Baan, and Workday — and conforms them into a single, always-fresh Silver view of what the business owes. Snowflake Dynamic Tables handle the incremental transformation from bronze landing tables through to a vendor-level rollup, with source-specific quirks (status vocabularies, a known Baan duplicate-extract issue, dropped system-specific columns) handled per a set of documented, finance-approved business rules rather than ad hoc judgment calls.
 
-On top of that pipeline sits a Snowflake Cortex Agent grounded in a native Semantic View: it answers quantitative questions ("which vendors have the most overdue invoices, and how much") via text-to-SQL against governed business metrics. A 15-question evaluation harness — covering core questions, rephrasings, edge cases, and deliberately ambiguous questions the agent should push back on — runs against the live agent so answer quality is measured, not assumed. The same agent is also published through a Snowflake-managed MCP server, so Claude can query it directly over OAuth as a least-privilege Snowflake user.
+On top of that pipeline sits a Snowflake Cortex Agent grounded in a native Semantic View: it answers quantitative questions ("which vendors have the most overdue invoices, and how much") via text-to-SQL against governed business metrics. A 15-question evaluation harness — covering core questions, rephrasings, edge cases, and deliberately ambiguous questions the agent should push back on — runs against the live agent so answer quality is measured, not assumed. The same agent is also published through a Snowflake-managed MCP server, so Claude can query it directly over OAuth as a least-privilege Snowflake user. A data-quality guardrail (BR-004) watches the Silver invoices for anything over USD 500,000 at the invoice-date exchange rate: a Data Metric Function with a Finance-owned tolerance, a review queue of flagged invoices, and a daily email alert — proven against seeded boundary cases before being trusted.
 
-### Multi-source AP invoices → Dynamic Tables → Semantic View → Cortex Agent → MCP for Claude
+### Multi-source AP invoices → Dynamic Tables → Semantic View → Cortex Agent → MCP for Claude, guarded by data-quality checks
 
 ---
 
@@ -15,6 +15,7 @@ On top of that pipeline sits a Snowflake Cortex Agent grounded in a native Seman
 [![Snowflake](https://img.shields.io/badge/Snowflake-Data_Cloud-29B5E8?style=for-the-badge&logo=snowflake&logoColor=white)](https://www.snowflake.com/)
 [![SQL](https://img.shields.io/badge/SQL-Dynamic_Tables-4479A1?style=for-the-badge&logo=snowflake&logoColor=white)](https://docs.snowflake.com/en/user-guide/dynamic-tables-about)
 [![Cortex AI](https://img.shields.io/badge/Cortex-Agents_%2B_Analyst-6E56CF?style=for-the-badge)](https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-agents)
+[![Data Quality](https://img.shields.io/badge/Data_Quality-DMF_%2B_Alerts-29B5E8?style=for-the-badge&logo=snowflake&logoColor=white)](https://docs.snowflake.com/en/user-guide/data-quality-intro)
 [![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/Status-Live_on_Snowflake-brightgreen?style=for-the-badge)](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai)
 
@@ -32,6 +33,7 @@ It implements:
 - **A Cortex Search service** — semantic search over free-text invoice line descriptions (`ap_invoice_search`), for fuzzy lookups that don't map cleanly to a `WHERE` clause
 - **A Cortex Agent** — Cortex Analyst (text-to-SQL over the semantic view) plus Cortex Search, answering both quantitative and free-text AP questions
 - **A Snowflake-managed MCP server** — `coco.mcp.ap_invoice_mcp` exposes the agent, Cortex Analyst and Cortex Search as 3 MCP tools, connected to Claude (claude.ai custom connector) via Snowflake OAuth as a dedicated user pinned to a narrow read-only role
+- **A BR-004 data-quality guardrail** — a Data Metric Function on Silver counts invoices over USD 500,000 at the invoice-date FX rate (Snowflake's free ECB/BIS dataset, latest rate on or before the invoice date), plus any it can't assess (fail-safe); an expectation fails above a Finance-owned tolerance of 2; a review-queue view lists every flagged invoice; a serverless alert emails when the tolerance is breached; a one-off task stops it all after a 10-day run
 - **An evaluation harness** — a 15-question golden set (core / rephrasings / edge cases / deliberately ambiguous / data-validation) scored against the live agent with pass/fail heuristics
 
 ---
@@ -48,7 +50,9 @@ It implements:
 | Orchestrating agent | Cortex Agents (REST API) | Wraps the Analyst and Search tools in one conversational interface |
 | AI client access | Snowflake-managed MCP server + Snowflake OAuth | Exposes agent / Analyst / Search as MCP tools to Claude under a least-privilege role |
 | Agent client / eval | Python 3.11 (project `.venv`), `requests`, `pyyaml` | Calls the Agents REST API and scores answers |
-| Direct SQL checks (dev) | `snowflake-connector-python` with PAT auth | Live verification queries; installed via `requirements-dev.txt` |
+| Data quality | Data Metric Function + expectation, Snowflake Alert, serverless Task | BR-004 high-value invoice guardrail, daily email, 10-day auto-stop |
+| FX rates | Snowflake Public Data (free) — ECB/BIS daily rates | USD-equivalent amounts at the invoice-date rate |
+| Direct SQL checks (dev) | `snowflake-connector-python` with PAT auth, `scripts/run_sql_checks.py` | Live verification queries and pass/fail SQL checks; installed via `requirements-dev.txt` |
 | Deployment | Bash + Snowflake CLI (`snow sql`) | Applies all SQL in order against a target account |
 
 ---
@@ -74,6 +78,11 @@ bronze.sap_ap_   bronze.oracle_   bronze.baan_    bronze.workday_
                               ▼
               silver.dt_silver_ap_invoices   (Dynamic Table — union + BR-001..BR-009)
                               │
+                              ├──► guardrails (BR-004, read-only on Silver)
+                              │      count_invoices_over_usd_500k  (DMF, daily 06:00 UTC, expectation VALUE <= 2)
+                              │        ◄── guardrails.fx_rates  (free ECB/BIS FX, invoice-date rate)
+                              │      high_value_invoices_for_review  (review queue view)
+                              │      alert_high_value_invoice_volume  (07:00 UTC) ──► email
                               ▼
                  silver.dt_vendor_invoice_summary   (Dynamic Table — vendor rollup)
                               │
@@ -108,6 +117,11 @@ bronze.sap_ap_   bronze.oracle_   bronze.baan_    bronze.workday_
 | `ap_invoice_agent` | Cortex Agent wrapping the Analyst and Search tools behind one conversational interface |
 | `ap_invoice_mcp` | Snowflake-managed MCP server publishing the agent, Analyst and Search as tools for Claude |
 | `mcp_claude_oauth` / `mcp_claude_role` | OAuth integration + least-privilege role the Claude connector signs in with (read access to Silver + semantic view only) |
+| `guardrails.fx_rates` | View over Snowflake's free FX dataset: one USD rate per currency per day (weak currencies use 1 ÷ USD→X to keep precision) |
+| `guardrails.count_invoices_over_usd_500k` | Data Metric Function: invoices > USD 500,000 at the invoice-date rate, plus unassessable ones (no rate / no amount) |
+| `guardrails.high_value_invoices_for_review` | Review queue: every flagged invoice with USD amount, rate, rate date/age and reason |
+| `guardrails.alert_high_value_invoice_volume` | Serverless alert: emails when the expectation (`VALUE <= 2`) is violated |
+| `guardrails.task_auto_stop_guardrail` | One-off task, 2026-10-13 07:30 UTC: suspends the alert, clears the DMF schedule, suspends itself |
 
 ---
 
@@ -131,14 +145,26 @@ snowflake-cortex-ai/
 │   ├── 03_semantic_view/
 │   │   ├── 01_sv_ap_analytics.sql             ← semantic view grounding Cortex Analyst
 │   │   └── 02_cs_ap_invoice_search.sql        ← Cortex Search service grounding free-text lookup
-│   └── 04_mcp/                                ← manual, run in Snowsight (not part of deploy.sh)
-│       ├── 00_mcp_role_and_user.sql           ← least-privilege role + dedicated Claude user (placeholders only)
-│       ├── 00b_fix_ap_invoice_agent.sql       ← rebuilds the registered agent spec (both tools, MCP-usable warehouse)
-│       ├── 01_mcp_server.sql                  ← Snowflake-managed MCP server with 3 tools
-│       ├── 02_oauth_security_integration.sql  ← Snowflake OAuth client for the claude.ai connector
-│       ├── 03_optional_readonly_sql_server.sql ← optional separate read-only SQL MCP server (not deployed)
-│       ├── 04_verify.sql                      ← read-only checks + builds the connector URL
-│       └── 99_teardown.sql                    ← removes all MCP access
+│   ├── 04_mcp/                                ← manual, run in Snowsight (not part of deploy.sh)
+│   │   ├── 00_mcp_role_and_user.sql           ← least-privilege role + dedicated Claude user (placeholders only)
+│   │   ├── 00b_fix_ap_invoice_agent.sql       ← rebuilds the registered agent spec (both tools, MCP-usable warehouse)
+│   │   ├── 01_mcp_server.sql                  ← Snowflake-managed MCP server with 3 tools
+│   │   ├── 02_oauth_security_integration.sql  ← Snowflake OAuth client for the claude.ai connector
+│   │   ├── 03_optional_readonly_sql_server.sql ← optional separate read-only SQL MCP server (not deployed)
+│   │   ├── 04_verify.sql                      ← read-only checks + builds the connector URL
+│   │   └── 99_teardown.sql                    ← removes all MCP access
+│   └── 05_guardrails/                         ← BR-004 high-value invoice guardrail (v0.3.0)
+│       ├── 00_account_grants_and_email.sql    ← ACCOUNTADMIN, manual: grants + email integration (email placeholder only)
+│       ├── 01_schema_and_fx_rates.sql         ← guardrails schema + FX view over the free ECB/BIS dataset
+│       ├── 02_high_value_dmf.sql              ← Data Metric Function: > USD 500,000 at invoice-date FX, fail-safe
+│       ├── 03_attach_to_silver.sql            ← daily 06:00 UTC schedule + expectation VALUE <= 2 on Silver
+│       ├── 04_review_queue_view.sql           ← every flagged invoice, with USD amount, rate and reason
+│       ├── 05_email_alert.sql                 ← email procedure + serverless alert (manual, --set email)
+│       ├── 06_auto_stop_after_10_days.sql     ← one-off task: stop everything on 2026-10-13 07:30 UTC
+│       ├── 90_test_fixture.sql                ← seeded boundary + edge cases (test schema)
+│       ├── 91…97_check_*.sql / 95,96_test_*.sql ← pass/fail checks run by scripts/run_sql_checks.py
+│       ├── 98_drop_test_objects.sql           ← removes the test schema
+│       └── 99_teardown.sql                    ← optional full removal
 │
 ├── cortex_agent/
 │   ├── agent_spec.yaml                        ← agent tool spec (Cortex Analyst + Cortex Search)
@@ -166,7 +192,8 @@ snowflake-cortex-ai/
 │   └── connection.example.toml                ← Snowflake connection template (copy → connection.toml)
 │
 ├── scripts/
-│   └── deploy.sh                               ← applies all sql/ files in order via the Snowflake CLI
+│   ├── deploy.sh                               ← applies all sql/ files in order via the Snowflake CLI
+│   └── run_sql_checks.py                       ← runs a .sql check file via the PAT; exits 1 on any FAIL row
 │
 ├── requirements.txt                            ← Python deps for the agent client + eval harness
 ├── requirements-dev.txt                        ← adds the Snowflake Python connector for direct SQL checks
@@ -206,13 +233,22 @@ cp config/connection.example.toml config/connection.toml      # macOS/Linux
 # then edit config/connection.toml with your account/user
 ```
 
-#### 5. Deploy the pipeline
+#### 5. Run the guardrail account grants (once, as ACCOUNTADMIN)
+In a Snowsight worksheet, run `sql/05_guardrails/00_account_grants_and_email.sql` one statement at a time, replacing `<your_verified_email>` **in the worksheet only**. It grants `SYSADMIN` what the BR-004 guardrail needs (create schemas in `coco`, run Data Metric Functions and read their results, run serverless alerts/tasks) and creates the `email_finance_alerts` integration. The guardrail's FX rates also need Snowflake's free **Snowflake Public Data** Marketplace listing installed as `SNOWFLAKE_PUBLIC_DATA_FREE`, with `GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE_PUBLIC_DATA_FREE TO ROLE SYSADMIN`.
+
+#### 6. Deploy the pipeline
 ```bash
 bash scripts/deploy.sh
 ```
-This applies, in order: warehouse/database/schema setup → the 4 bronze source tables (with sample data) → the 2 Silver Dynamic Tables → the semantic view → the Cortex Search service.
+This applies, in order: warehouse/database/schema setup → the 4 bronze source tables (with sample data) → the 2 Silver Dynamic Tables → the semantic view → the Cortex Search service → the BR-004 guardrail (FX view, DMF, attachment to Silver, review queue).
 
-#### 6. Set your Snowflake REST API credentials
+Then turn on the alert and the 10-day auto-stop (the email address is substituted at run time and never written to a file):
+```bash
+python scripts/run_sql_checks.py sql/05_guardrails/05_email_alert.sql --set your_verified_email=<you@example.com>
+python scripts/run_sql_checks.py sql/05_guardrails/06_auto_stop_after_10_days.sql
+```
+
+#### 7. Set your Snowflake REST API credentials
 `run_agent.py` calls the Cortex Agents and SQL APIs directly with a Personal Access Token — it does not require registering a saved agent object first.
 ```bash
 # PowerShell
@@ -221,25 +257,38 @@ $env:SNOWFLAKE_PAT = "<your PAT>"              # generate via ALTER USER <you> A
 ```
 Note: PATs require `PROGRAMMATIC_ACCESS_TOKEN` to be listed in your account's authentication policy, and a network policy must be attached to the user (Snowflake enforces this for PATs even with an unrestricted `0.0.0.0/0` policy) — see `ALTER AUTHENTICATION POLICY` / `ALTER USER ... SET NETWORK_POLICY` if token creation is rejected.
 
-#### 7. Ask the agent a question
+#### 8. Ask the agent a question
 ```bash
 python cortex_agent/run_agent.py "Which vendors have the most overdue invoices?"
 ```
 The `cortex_analyst_text_to_sql` tool returns governed SQL rather than executed results, so `run_agent.py` runs that SQL itself via the SQL API and prints the interpretation plus real rows.
 
-#### 8. Run the evaluation harness
+#### 9. Run the evaluation harness
 ```bash
 python eval/run_eval.py
 ```
 
-#### 9. (Optional) Connect the agent to Claude via MCP
+#### 10. (Optional) Connect the agent to Claude via MCP
 Run the `sql/04_mcp/` scripts in a Snowsight worksheet in order — `00` → `00b` → `01` → `02` → `04` (skip `03`). Fill the password/email placeholders in the worksheet only, never in the file. Then in claude.ai → Settings → Connectors → *Add custom connector*, paste the URL printed by `04_verify.sql` (`https://<account>.snowflakecomputing.com/api/v2/databases/COCO/schemas/MCP/mcp-servers/AP_INVOICE_MCP`) and the OAuth client ID/secret from `02`, then sign in as `claude_mcp_user`. `99_teardown.sql` removes everything.
 
 ---
 
 ## 🧪 Tests
 
-No automated unit/integration test suite yet — see Roadmap. Correctness today is checked via `eval/run_eval.py`, which runs the 15-question golden set (`eval/golden_dataset.jsonl`) against the live agent and applies heuristic pass/fail checks per question (`eval/metrics.py`).
+No unit test suite or CI yet — see Roadmap. Two kinds of live checks run against the real account:
+
+- **Agent evaluation** — `eval/run_eval.py` runs the 15-question golden set (`eval/golden_dataset.jsonl`) against the live agent and applies heuristic pass/fail checks per question (`eval/metrics.py`).
+- **BR-004 guardrail checks** — SQL files in `sql/05_guardrails/` return rows of `CHECK_NAME, EXPECTED, ACTUAL, OUTCOME`; `scripts/run_sql_checks.py` runs a file through the PAT and exits 1 if any row is `FAIL`:
+
+  ```bash
+  python scripts/run_sql_checks.py sql/05_guardrails/90_test_fixture.sql          # seeds 6 boundary + 6 edge cases (test schema)
+  python scripts/run_sql_checks.py sql/05_guardrails/91_check_fx_rates.sql        # FX values, precision, uniqueness (8 checks)
+  python scripts/run_sql_checks.py sql/05_guardrails/92_check_dmf_counts.sql      # DMF: fixture 3, Silver 0, 5 edge cases (7 checks)
+  python scripts/run_sql_checks.py sql/05_guardrails/93_check_review_rule.sql     # review-queue rule + real view (5 checks)
+  python scripts/run_sql_checks.py sql/05_guardrails/94_check_expectation_status.sql --repeat 8 --interval 120  # scheduled results
+  python scripts/run_sql_checks.py sql/05_guardrails/97_check_pipeline_unaffected.sql  # Silver, refresh, MCP role untouched
+  ```
+  `95_test_email_alert.sql` sends one real email (run it once, never with `--repeat`); `96_test_auto_stop.sql` proves the auto-stop task on test objects. `98_drop_test_objects.sql` removes the test schema afterwards.
 
 ---
 
@@ -290,6 +339,21 @@ Apex Staffing Solutions, 100000.00
 | `ap-invoice-analyst` | "Which vendors have the highest total invoice amount?" | Correct `SEMANTIC_VIEW(... METRICS total_spend DIMENSIONS vendor_name)` SQL |
 | `ap-invoice-agent` | "How many invoices per source system, and total spend for each?" | Executed SQL: SAP 15 / Oracle 15 / Baan 10 / Workday 10 = 50; spend kept per currency (BR-002) |
 
+**BR-004 guardrail — every check passed live** (2026-10-03 → 2026-10-04, via `scripts/run_sql_checks.py`):
+
+| Check file | What it proves | Result |
+|---|---|---|
+| `90_test_fixture.sql` | 6 boundary invoices (600,000 USD; exactly 500,000; EUR just over/under; GBP on a Sunday → Friday rate; unknown currency) + 6 edge-case rows seeded | 6 + 6 rows |
+| `91_check_fx_rates.sql` | Known EUR/GBP rates, no GBP rate on a Sunday (so the fallback is exercised), full-precision JPY/COP via 1 ÷ USD→X, one rate per currency per day, no rate for the test currency `XTS` | 8/8 PASS |
+| `92_check_dmf_counts.sql` | DMF counts fixture **3** (600K USD, EUR over, no-rate fail-safe) and real Silver **0**; stale rate, lowercase code, null amount, credit note, same id in two systems | 7/7 PASS |
+| `93_check_review_rule.sql` | Review rule flags the same fixture invoices as the DMF, with correct EUR→USD amount, rate fields and the no-rate reason; the real view over Silver lists 0 invoices | 5/5 PASS |
+| `94_check_expectation_status.sql` | Scheduled results: fixture expectation **violated** (value 3 > 2); Silver's first daily run (2026-10-04 06:00 UTC) **passing** | 3/3 PASS |
+| `95_test_email_alert.sql` | Test alert on the fixture fired and the email arrived (*"BR-004: 3 high-value invoices (tolerance 2)"*) | Confirmed in inbox |
+| `96_test_auto_stop.sql` | One-off task suspended the test alert, cleared the DMF schedule, then suspended itself | 3/3 PASS |
+| `97_check_pipeline_unaffected.sql` | Silver still 50 rows with exactly one DMF association and a healthy refresh; the MCP role has no access to `guardrails` | 4/4 PASS |
+
+A test Dynamic Table over the fixture also proved that DMF results on a Dynamic Table are found with `REF_ENTITY_DOMAIN = 'TABLE'`, which is the lookup the real alert uses on Silver. A mutation test (both fail-safes removed) turned the null-amount, lowercase-code and fixture-count checks red before the logic was restored. The test schema was then dropped (`98_drop_test_objects.sql`).
+
 ---
 
 ## ⚠️ Known Limitations
@@ -303,14 +367,20 @@ Apex Staffing Solutions, 100000.00
 - The `cortex_analyst_text_to_sql` tool returns governed SQL, not executed results — `run_agent.py` executes that SQL itself via the SQL API rather than relying on the orchestration model to do so
 - `ap_invoice_search` (Cortex Search over `line_description`) is confirmed working live through the MCP server, but `run_agent.py`'s own result formatting has only been exercised against `cortex_analyst_text_to_sql` responses — its `cortex_search` handling is still an untested generic JSON fallback
 - The MCP connector runs as a dedicated `claude_mcp_user`, because Claude always requests the `session:role:all` OAuth scope and so uses the signed-in user's default role; Cortex usage through the connector is billed to the account like any other Cortex call
+- **BR-004 FX rates are indicative, not Treasury's.** They come from Snowflake's free public dataset (ECB/BIS); `guardrails.fx_rates` is the single place to swap in Treasury's corporate rates (BR-002). The free tier's latest rate was **2026-07-03** as of 2026-10-03, so a newly dated invoice converts at an older rate — the review queue shows `rate_age_days`. The dataset rounds rates to 4 decimal places, so currencies worth less than 1 USD use 1 ÷ (USD→currency) instead
+- **BR-004 tolerance N = 2 is a placeholder** pending Finance (Tom Walsh) confirmation, counted over the current Silver snapshot rather than per month. A historical baseline is on the Roadmap
+- **Credit notes are not flagged:** BR-004 says `amount > 500,000`, so a −600,000 credit note passes. Invoices with no amount or no usable FX rate are flagged (fail-safe)
+- **The guardrail runs for 10 days only** (2026-10-03 → 2026-10-13 07:30 UTC), then a one-off task suspends the alert and clears the DMF schedule to save trial credits. Every object stays; restart with `ALTER TABLE coco.silver.dt_silver_ap_invoices SET DATA_METRIC_SCHEDULE = 'USING CRON 0 6 * * * UTC'` and `ALTER ALERT coco.guardrails.alert_high_value_invoice_volume RESUME`
+- **Changing a DMF schedule is not instant:** after switching Silver's schedule, Snowflake left it `STARTED_AND_PENDING_SCHEDULE_UPDATE` with no runs for 30+ minutes; detaching, setting the schedule, then re-attaching gave a clean `STARTED`
 
 ---
 
 ## 🔜 Roadmap
 
 - [x] `v0.2.0` — Snowflake-managed MCP server exposing the agent, Analyst and Search to Claude (shipped 2026-10-02)
-- `v0.3.0` — BR-004 data-quality guardrail: flag invoices > $500K USD-equivalent via a Data Metric Function
+- [x] `v0.3.0` — BR-004 data-quality guardrail: invoices > USD 500K at invoice-date FX via a Data Metric Function, review queue, email alert (shipped 2026-10-04)
 - `v0.4.0` — GitHub Actions workflow running `eval/run_eval.py` on every push
+- `v0.5.0` — BR-004 historical-baseline tolerance (rolling average with seasonality) once there is invoice history, replacing the fixed N = 2
 - `v1.0.0` — Documented, reproducible end-to-end demo with CI-verified eval results
 
 ---
@@ -332,6 +402,7 @@ Apex Staffing Solutions, 100000.00
 - **Currencies** — USD, EUR and GBP, deliberately not converted (BR-002)
 - **Business requirements** — 3 CSVs (source onboarding, column mapping, business rules) that drive the Silver layer's design, in `docs/business_requirements/`
 - **Evaluation set** — 15 golden questions (core, rephrasings, edge cases, deliberately ambiguous, data validation) in `eval/golden_dataset.jsonl`
+- **FX rates (BR-004 only)** — Snowflake's free **Snowflake Public Data** listing (`FX_RATES_TIMESERIES`, sourced from the ECB and BIS), used read-only to convert amounts to USD for the guardrail; the Silver data itself stays in its original currencies
 
 **How this repo uses it**
 - Implements the pipeline the workshop describes (Dynamic Tables → Semantic View → Cortex Agent → evaluation framework) as a standalone, version-controlled project

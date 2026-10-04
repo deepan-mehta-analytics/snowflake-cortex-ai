@@ -27,4 +27,4 @@ defined in `sample_business_requirements_business_rules.csv`.
 | BR-009 | Sources refresh at different cadences; Silver should not force an artificial cadence | `TARGET_LAG = DOWNSTREAM` |
 | BR-010 | Bronze retains full history; Silver/Gold are current-state | No retention logic needed — Dynamic Tables reflect current state by design |
 
-BR-004 (amount-threshold data quality flagging) is intentionally **not** implemented in the Silver DT — the business rule specifies it as a Data Metric Function / guardrail concern, which is out of scope for this repo's current phase (see root `README.md` Roadmap).
+BR-004 (amount-threshold data quality flagging) is implemented **outside** the Silver DT, as the rule requires, in `sql/05_guardrails/` (v0.3.0): a Data Metric Function attached to Silver counts invoices over USD 500,000 at the invoice-date FX rate (plus any that can't be assessed), an expectation fails above a Finance-owned tolerance of 2, a review-queue view lists every flagged invoice, and a daily email alert fires when the tolerance is breached. No Silver rows are filtered or changed.
