@@ -74,6 +74,12 @@ def mentions_threshold(answer: str, row: dict) -> tuple[bool, str]:
     note = "reflects the $100,000 threshold" if passed else "answer does not reference the threshold"
     return passed, note
 
+def mentions_hydraulic(answer: str, row: dict) -> tuple[bool, str]:
+    """Pass if a Cortex Search answer surfaces the hydraulic line items (q16)."""
+    passed = "hydraulic" in answer.lower()                         # the matching line descriptions say "Hydraulic pumps"
+    note = "surfaces hydraulic line items" if passed else "no hydraulic line items in answer"
+    return passed, note
+
 def no_hallucinated_certainty(answer: str, row: dict) -> tuple[bool, str]:
     """Fail if the answer asserts a fact with no hedge and no source grounding language."""
     hedge_words = ["clarify", "which", "what time", "what do you mean", "could you specify",
@@ -93,6 +99,7 @@ CHECKS = {
     "mentions_acme": mentions_acme,
     "mentions_overdue": mentions_overdue,
     "mentions_threshold": mentions_threshold,
+    "mentions_hydraulic": mentions_hydraulic,
     "no_hallucinated_certainty": no_hallucinated_certainty,
 }
 
