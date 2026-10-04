@@ -96,3 +96,45 @@ def test_unknown_question_text_is_an_error():
         assert False, "expected KeyError"
     except KeyError as exc:
         assert "Some other question" in str(exc)                           # names the offending text
+
+# ── Run polling (status words from the live run, Task 1) ──────
+from native_eval import RunFailed, wait_for_run                            # noqa: E402 — poll loop under test
+
+def test_wait_returns_on_completed_and_skips_invocation_completed():
+    """INVOCATION_COMPLETED is not terminal — keep polling until COMPLETED (seen live)."""
+    statuses = iter(["INVOCATION_IN_PROGRESS", "INVOCATION_COMPLETED", "COMPUTATION_IN_PROGRESS", "COMPLETED"])
+    assert wait_for_run(lambda: next(statuses), sleep=lambda s: None, timeout_s=600, interval_s=30) == "COMPLETED"
+
+def test_wait_accepts_partially_completed():
+    """A partially completed run still yields results (errored records are scored 0 and reported)."""
+    statuses = iter(["COMPUTATION_IN_PROGRESS", "PARTIALLY_COMPLETED"])
+    assert wait_for_run(lambda: next(statuses), sleep=lambda s: None, timeout_s=600, interval_s=30) == "PARTIALLY_COMPLETED"
+
+def test_wait_raises_on_cancelled():
+    """A cancelled run is an infrastructure failure."""
+    statuses = iter(["INVOCATION_IN_PROGRESS", "CANCELLED"])
+    try:
+        wait_for_run(lambda: next(statuses), sleep=lambda s: None, timeout_s=600, interval_s=30)
+        assert False, "expected RunFailed"
+    except RunFailed as exc:
+        assert "CANCELLED" in str(exc)                                     # status named in the message
+
+def test_wait_raises_on_timeout():
+    """A run that never finishes within the limit is an infrastructure failure."""
+    try:
+        wait_for_run(lambda: "COMPUTATION_IN_PROGRESS", sleep=lambda s: None, timeout_s=60, interval_s=30)
+        assert False, "expected RunFailed"
+    except RunFailed as exc:
+        assert "timed out" in str(exc)                                     # timeout named in the message
+
+# ── CLI re-gate path (no Snowflake) ───────────────────────────
+from native_eval import main                                               # noqa: E402 — CLI entry point
+
+def test_scores_file_regression_exits_1_and_missing_baseline_exits_2(tmp_path):
+    """--scores-file re-gates a saved run: below baseline → 1; missing baseline → 2."""
+    saved = tmp_path / "run.json"                                          # a saved results file
+    saved.write_text('{"scores": {"q01": {"answer_correctness": 0.5, "logical_consistency": 0.5}}, "errors": {}}', encoding="utf-8")
+    strict = tmp_path / "baseline.json"                                    # a baseline the run can't meet
+    strict.write_text('{"means": {"answer_correctness": 1.0, "logical_consistency": 1.0}, "per_question": {}}', encoding="utf-8")
+    assert main(["--scores-file", str(saved), "--baseline", str(strict)]) == 1  # quality regression
+    assert main(["--scores-file", str(saved), "--baseline", str(tmp_path / "none.json")]) == 2  # no baseline

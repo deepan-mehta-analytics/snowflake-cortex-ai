@@ -8,9 +8,20 @@ eval/gate.py against eval/baseline.json. Exit codes: 0 pass, 1 regression,
 """
 
 # ── Imports ───────────────────────────────────────────────────
+import argparse                              # CLI flags
+import datetime                              # timestamps for results/baseline
 import hashlib                               # content hash → dataset name
 import json                                  # read JSONL rows, write results
+import os                                    # env vars
+import sys                                   # exit codes, stderr
+import tempfile                              # local file to PUT
+import time                                  # sleep between status polls
 from pathlib import Path                     # file paths
+
+import snowflake.connector                   # Snowflake Python connector (requirements-dev.txt)
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # import gate.py from eval/
+from gate import evaluate_gate, means, render_summary     # noqa: E402 — pure gate (Task 2), after the path insert
 
 # ── Paths and names ───────────────────────────────────────────
 EVAL_DIR = Path(__file__).resolve().parent                    # eval/
@@ -57,3 +68,135 @@ def parse_results(rows, id_by_question):
             score = None                                               # treat like an errored record
         scores.setdefault(qid, {})[r["METRIC_NAME"]] = float(score) if score is not None else 0.0  # errors count as 0
     return scores, errors                                              # per-question scores + error notes
+
+# ── Live section ──────────────────────────────────────────────
+TERMINAL_OK = {"COMPLETED", "PARTIALLY_COMPLETED"}           # run finished; partial = some records errored (scored 0)
+TERMINAL_BAD = {"CANCELLED"}                                 # run will never produce scores
+
+class RunFailed(Exception):
+    """The evaluation run failed, was cancelled or timed out, or setup is missing (exit 2)."""
+
+def wait_for_run(get_status, sleep=time.sleep, timeout_s=1500, interval_s=30):
+    """Poll get_status() until the run finishes; raise RunFailed on cancellation or timeout."""
+    waited = 0                                                     # seconds spent waiting
+    while True:                                                    # until a terminal status
+        status = get_status()                                      # current run status word
+        if status in TERMINAL_OK:                                  # finished (INVOCATION_COMPLETED is NOT terminal)
+            return status
+        if status in TERMINAL_BAD:                                 # finished badly
+            raise RunFailed(f"evaluation run ended with status {status}")
+        if waited >= timeout_s:                                    # out of time
+            raise RunFailed(f"evaluation run timed out after {waited}s (last status {status})")
+        sleep(interval_s)                                          # wait before the next poll
+        waited += interval_s                                       # count the wait
+
+def connect():
+    """Open a PAT session from environment variables (never printed)."""
+    missing = [v for v in ("SNOWFLAKE_ACCOUNT", "SNOWFLAKE_USER", "SNOWFLAKE_PAT") if not os.environ.get(v)]  # required settings
+    if missing:                                                    # fail fast with a plain message
+        raise RunFailed(f"missing environment variable(s): {', '.join(missing)}")
+    return snowflake.connector.connect(                            # one session for the whole run
+        account=os.environ["SNOWFLAKE_ACCOUNT"], user=os.environ["SNOWFLAKE_USER"],  # who connects
+        authenticator="PROGRAMMATIC_ACCESS_TOKEN", token=os.environ["SNOWFLAKE_PAT"],  # PAT goes in token=, not password=
+        role=os.environ.get("SNOWFLAKE_ROLE") or None,             # default role unless overridden
+        warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE", "WH_COCO_PIPELINE"),  # agent SQL + evaluation tasks
+        database="COCO", schema="EVAL")                            # dataset lands in the session schema (Task 1)
+
+def load_dataset(cur, rows):
+    """Replace the table's rows with the golden set (small table; full refresh keeps it exact)."""
+    cur.execute(f"DELETE FROM {TABLE}")                            # drop old rows
+    for r in rows:                                                 # 15 inserts, bound parameters
+        truth = json.dumps({"ground_truth_output": r["ground_truth_output"]}, ensure_ascii=False)  # VARIANT payload
+        cur.execute(f"INSERT INTO {TABLE} (question_id, category, query_text, ground_truth) "
+                    "SELECT %s, %s, %s, PARSE_JSON(%s)",          # PARSE_JSON needs INSERT … SELECT
+                    (r["id"], r["category"], r["question"], truth))
+
+def put_config(cur, run_name, config_text):
+    """Write the rendered config to a temp file, PUT it on the stage, return its stage path."""
+    with tempfile.TemporaryDirectory() as tmp:                     # local copy to PUT
+        path = Path(tmp) / f"{run_name}.yaml"                      # one config file per run
+        path.write_text(config_text, encoding="utf-8")             # rendered YAML
+        cur.execute(f"PUT 'file://{path.as_posix()}' {STAGE} AUTO_COMPRESS=FALSE OVERWRITE=TRUE")  # upload as-is
+    return f"{STAGE}/{run_name}.yaml"                              # stage path for EXECUTE_AI_EVALUATION
+
+def start_run(cur, run_name, dataset, template_text):
+    """START with the dataset: block; if that dataset already exists, START again without it."""
+    start_sql = "CALL EXECUTE_AI_EVALUATION('START', OBJECT_CONSTRUCT('run_name', %s), %s)"  # start statement
+    config_ref = put_config(cur, run_name, render_config(template_text, dataset, TABLE, run_name))  # first try creates the dataset
+    try:
+        cur.execute(start_sql, (run_name, config_ref))            # start the run
+    except snowflake.connector.errors.ProgrammingError as exc:     # Task 1: 210007 "already exists" on repeat runs
+        if "already exists" not in str(exc):                       # any other error is real
+            raise
+        reuse = render_config(template_text, dataset, TABLE, run_name, include_dataset=False)  # no dataset: block
+        config_ref = put_config(cur, run_name, reuse)              # replace the staged config
+        cur.execute(start_sql, (run_name, config_ref))            # start against the existing dataset
+    return config_ref                                              # STATUS calls need the same config path
+
+def run_evaluation(cur, run_name, dataset, template_text):
+    """Start the run, poll until done, return GET_AI_EVALUATION_DATA rows as dicts."""
+    config_ref = start_run(cur, run_name, dataset, template_text)  # dataset created or reused
+    def status():                                                  # one STATUS poll
+        cur.execute("CALL EXECUTE_AI_EVALUATION('STATUS', OBJECT_CONSTRUCT('run_name', %s), %s)", (run_name, config_ref))
+        columns = [d[0] for d in cur.description]                  # RUN_NAME, AGENT_NAME, AGENT_TYPE, STATUS, STATUS_DETAILS
+        return str(dict(zip(columns, cur.fetchone()))["STATUS"]).upper()  # e.g. COMPUTATION_IN_PROGRESS
+    final = wait_for_run(status)                                   # raises RunFailed on cancel/timeout
+    print(f"evaluation run {run_name}: {final}")                   # CI log
+    cur.execute("SELECT * FROM TABLE(SNOWFLAKE.LOCAL.GET_AI_EVALUATION_DATA('COCO', 'AGENT', 'AP_INVOICE_AGENT', 'CORTEX AGENT', %s))",
+                (run_name,))                                       # agent's database + schema, run name
+    columns = [d[0] for d in cur.description]                      # column names
+    return [dict(zip(columns, row)) for row in cur.fetchall()]     # rows as dicts
+
+def gate_and_report(rows, scores, errors, args):
+    """Gate scores against the baseline file, print + append the summary; return 0 pass, 1 regression, 2 no baseline."""
+    baseline_path = Path(args.baseline)                            # committed baseline
+    if not baseline_path.exists():                                 # no baseline yet = setup problem, not quality
+        print(f"infrastructure problem: baseline {baseline_path} not found; record one first", file=sys.stderr)
+        return 2
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))  # committed baseline
+    result = evaluate_gate(scores, baseline)                       # pass/fail
+    text = render_summary(scores, baseline, result, {r["id"]: r["category"] for r in rows}, errors)  # markdown
+    print(text)                                                    # CI log
+    if args.summary:                                               # GitHub step summary
+        with open(args.summary, "a", encoding="utf-8") as handle:  # append, UTF-8
+            handle.write(text)
+    return 0 if result.passed else 1                               # quality verdict
+
+def main(argv=None):
+    """CLI: run, gate (or record a baseline), write summary + results; return 0/1/2."""
+    parser = argparse.ArgumentParser(description=__doc__)          # help text = module docstring
+    parser.add_argument("--summary")                               # markdown file to append (CI: $GITHUB_STEP_SUMMARY)
+    parser.add_argument("--baseline", default=str(BASELINE_PATH))  # baseline file to gate against / write
+    parser.add_argument("--record-baseline", action="store_true")  # write the baseline instead of gating
+    parser.add_argument("--scores-file")                           # re-gate a saved results JSON (no live run, no credits)
+    args = parser.parse_args(argv)                                 # parsed flags
+    rows = load_golden()                                           # golden questions
+    if args.scores_file:                                           # offline re-gate of an earlier run
+        saved = json.loads(Path(args.scores_file).read_text(encoding="utf-8"))  # {"scores": ..., "errors": ...}
+        return gate_and_report(rows, saved["scores"], saved["errors"], args)    # same gate path as a live run
+    dataset = dataset_name(rows)                                   # content-hashed dataset name
+    sha = os.environ.get("GITHUB_SHA", "local")[:8]                # commit (or "local")
+    suffix = os.environ.get("GITHUB_RUN_ID") or datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S")  # unique per run
+    run_name = f"ci-{sha}-{suffix}"                                # evaluation run name (never reused)
+    try:
+        with connect() as conn:                                    # PAT session; the only network section
+            cur = conn.cursor()                                    # one cursor
+            load_dataset(cur, rows)                                # refresh the source table
+            raw = run_evaluation(cur, run_name, dataset, TEMPLATE_PATH.read_text(encoding="utf-8"))  # live run
+    except (RunFailed, snowflake.connector.errors.Error) as exc:   # anything that isn't a quality verdict
+        print(f"infrastructure problem: {exc}", file=sys.stderr)   # plain message for the CI log
+        return 2
+    scores, errors = parse_results(raw, {r["question"]: r["id"] for r in rows})  # per-question scores
+    RESULTS_DIR.mkdir(exist_ok=True)                               # gitignored output dir
+    out = {"run_name": run_name, "dataset": dataset, "scores": scores, "errors": errors, "means": means(scores)}  # run record
+    (RESULTS_DIR / f"native_{run_name}.json").write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+    if args.record_baseline:                                       # write the baseline, don't gate
+        baseline = {"recorded": datetime.date.today().isoformat(), "run_name": run_name,
+                    "means": means(scores), "per_question": scores}  # what later runs compare against
+        Path(args.baseline).write_text(json.dumps(baseline, indent=2), encoding="utf-8")
+        print(f"baseline recorded: {baseline['means']}  errors: {errors}")  # visible in the CI log
+        return 0
+    return gate_and_report(rows, scores, errors, args)             # gate this run
+
+if __name__ == "__main__":
+    sys.exit(main())                                               # exit code for CI
