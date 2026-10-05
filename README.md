@@ -342,7 +342,7 @@ python -m pytest tests/      # 38 tests: gate rules, dataset naming, config rend
 
 ## 📊 Results / Performance
 
-Deployed and evaluated end-to-end against a live Snowflake trial account (2026-07-16).
+Deployed and evaluated end-to-end against a live Snowflake trial account: first deployed 2026-07-16, with the MCP, guardrail and CI evaluation results below from 2026-10-02 → 2026-10-04.
 
 **Pipeline row counts** (bronze → silver, all verified via `SHOW`/`SELECT` after each step, not just a bare success message):
 
@@ -420,6 +420,7 @@ A test Dynamic Table over the fixture also proved that DMF results on a Dynamic 
 - GL account codes are not cross-mapped across sources (BR-006) — a unified chart of accounts is a Phase 2 concern, not implemented here
 - The source data has no paid/unpaid flag — "overdue" is approximated as `due_date < CURRENT_DATE()` — since the sample data is dated 2025, this approximation drifts further from reality the longer the demo sits unrefreshed. By 2026-10-03 it had fully drifted: the live agent counted all 50 invoices as overdue, so overdue-based answers no longer separate vendors meaningfully until the dates are refreshed or a paid flag is added
 - `eval/metrics.py` checks are heuristic (keyword/shape-based), not semantic — a good answer can fail a check and vice versa; the failing "ambiguous" check in the results above is a scorer gap, not an agent defect. That is why the CI gate uses the native LLM judge instead
+- **`scripts/deploy.sh` has never been run end-to-end.** It needs the Snowflake CLI (`snow`) and leaves out the agent (`sql/04_mcp/00b`) and every ACCOUNTADMIN script; the live account was built by running the scripts in Snowsight. A tested deploy runner over the PAT is in progress for `v1.0.0`
 - **CI, not CD:** the workflows test the agent already deployed in the account; they do not deploy SQL or agent changes
 - **The CI user's network policy allows `0.0.0.0/0`,** because GitHub-hosted runners have no fixed IPs. The boundary is the role: the PAT is restricted to `ci_eval_role`, which can read only the agent, its tools and the `eval` schema
 - **The LLM judge varies between runs** (q11 `logical_consistency` went 1.00 → 0.33 between two identical runs), so the gate compares means with a 0.10 tolerance and only warns on single questions
@@ -442,7 +443,7 @@ A test Dynamic Table over the fixture also proved that DMF results on a Dynamic 
 - [x] `v0.3.0` — BR-004 data-quality guardrail: invoices > USD 500K at invoice-date FX via a Data Metric Function, review queue, email alert (shipped 2026-10-04)
 - [x] `v0.4.0` — GitHub Actions: offline lint + tests on every push, and a native Cortex Agent Evaluation gate against a committed baseline (shipped 2026-10-04)
 - `v0.5.0` — BR-004 historical-baseline tolerance (rolling average with seasonality) once there is invoice history, replacing the fixed N = 2
-- `v1.0.0` — Documented, reproducible end-to-end demo with CI-verified eval results
+- `v1.0.0` — Deterministic, documented demo (in progress): "overdue" measured against a fixed reporting date instead of today's date, a tested deploy runner with a grant check, a 19-question golden set, and a committed evidence snapshot that outlives the trial account (2026-11-11)
 
 ---
 
