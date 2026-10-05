@@ -302,7 +302,7 @@ python eval/run_eval.py
 3. Record a baseline: Actions → **Live eval** → *Run workflow* with `record_baseline` ticked, download the `native-eval-results` artifact and commit its `baseline.json` as `eval/baseline.json` (or run `python eval/native_eval.py --record-baseline` locally with the same environment variables).
 4. The evaluation dataset must be owned by `ci_eval_role`. If it was first created by another role (for example a local run as SYSADMIN), transfer it: `GRANT OWNERSHIP ON DATASET coco.eval.<dataset> TO ROLE ci_eval_role COPY CURRENT GRANTS` (MODIFY cannot be granted on a dataset).
 
-From then on, every push to `main` that touches `sql/`, `cortex_agent/`, `cortex_project/`, `eval/` or the workflow runs the live evaluation (about $9 of trial credit per run). Set `LIVE_EVAL_ENABLED = false` to turn it off; `sql/06_ci/99_teardown.sql` removes the CI identity.
+From then on, every push to `main` that touches `sql/`, `cortex_agent/`, `cortex_project/`, `eval/` or the workflow runs the live evaluation (about $8 of trial credit per run, metered). Set `LIVE_EVAL_ENABLED = false` to turn it off; `sql/06_ci/99_teardown.sql` removes the CI identity.
 
 #### 11. (Optional) Connect the agent to Claude via MCP
 Run the `sql/04_mcp/` scripts in a Snowsight worksheet in order — `00` → `00b` → `01` → `02` → `04` (skip `03`). Fill the password/email placeholders in the worksheet only, never in the file. Then in claude.ai → Settings → Connectors → *Add custom connector*, paste the URL printed by `04_verify.sql` (`https://<account>.snowflakecomputing.com/api/v2/databases/COCO/schemas/MCP/mcp-servers/AP_INVOICE_MCP`) and the OAuth client ID/secret from `02`, then sign in as `claude_mcp_user`. `99_teardown.sql` removes everything.
@@ -361,7 +361,7 @@ Deployed and evaluated end-to-end against a live Snowflake trial account (2026-0
 | Baseline — local dress rehearsal, 2026-10-04 | SYSADMIN | 0.94 | 0.98 | 17/17 scored, recorded as `eval/baseline.json` |
 | [GitHub Actions run 37212982730](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/runs/37212982730), 2026-10-04 | `ci_eval_user` / `ci_eval_role` | 0.92 | 0.96 | ✅ PASS (4 min 21 s), 17/17 scored |
 
-The judge scored 13 of 17 questions 1.00 on both metrics in the CI run. Lower scores: q11, q12, q13 and q16 at 0.67 `answer_correctness`, and a warning on q11 `logical_consistency` (1.00 → 0.33), which shows the judge's run-to-run variance on the harder questions. The exit-code paths were also proven live: a bad PAT exits 2, a stricter baseline exits 1, and a missing baseline now exits 2 *before* any paid run starts. A full 17-question run costs roughly **$9 of trial credit** (estimated from the account balance; agent calls plus the LLM judge).
+The judge scored 13 of 17 questions 1.00 on both metrics in the CI run. Lower scores: q11, q12, q13 and q16 at 0.67 `answer_correctness`, and a warning on q11 `logical_consistency` (1.00 → 0.33), which shows the judge's run-to-run variance on the harder questions. The exit-code paths were also proven live: a bad PAT exits 2, a stricter baseline exits 1, and a missing baseline now exits 2 *before* any paid run starts. A full 17-question run costs about **$8 of trial credit**, metered from `METERING_HISTORY` / `USAGE_IN_CURRENCY_DAILY`: 3.6–3.9 AI credits at $2.20 each (Cortex Agents ≈ 2.2–2.3 credits plus the LLM judge's AI inference ≈ 1.4–1.5 credits), plus a few cents of warehouse time.
 
 **Heuristic smoke test** (`eval/run_eval.py` against the live agent, original 15-question set):
 
