@@ -134,7 +134,7 @@ def test_agent_file_splits_into_create_and_alter():
 
 def test_agent_computes_totals_in_sql_everywhere():
     """The agent must total in SQL, not by hand: q11 runs summed USD in prose and got it wrong."""
-    rule = "never add numbers up yourself"                       # wording shared by both copies
+    rule = "When the answer states an overall total, compute it in SQL too"  # grand totals too, not just per-group sums
     for rel in ("sql/04_mcp/00b_fix_ap_invoice_agent.sql", "cortex_project/ap_invoice_agent.agent.yaml"):
         assert rule in (ROOT / rel).read_text(encoding="utf-8"), rel  # live spec and CLI copy agree
 
