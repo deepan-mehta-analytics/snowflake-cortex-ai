@@ -1,0 +1,80 @@
+MANUAL     00_setup/00_database_schema_warehouse.sql   (see docs/deploy_checklist.md)
+MANUAL     05_guardrails/00_account_grants_and_email.sql   (see docs/deploy_checklist.md)
+MANUAL     04_mcp/00_mcp_role_and_user.sql   (see docs/deploy_checklist.md)
+MANUAL     06_ci/00_ci_eval_role_and_user.sql   (see docs/deploy_checklist.md)
+DEPLOY     01_bronze_sources/01_sap_ap_invoices.sql   (4 statements)
+     1. USE DATABASE coco;
+     2. USE SCHEMA bronze;
+     3. CREATE OR REPLACE TABLE sap_ap_invoices (
+     4. INSERT INTO sap_ap_invoices VALUES
+DEPLOY     01_bronze_sources/02_oracle_ap_invoices.sql   (4 statements)
+     1. USE DATABASE coco;
+     2. USE SCHEMA bronze;
+     3. CREATE OR REPLACE TABLE oracle_ap_invoices (
+     4. INSERT INTO oracle_ap_invoices VALUES
+DEPLOY     01_bronze_sources/03_baan_ap_invoices.sql   (4 statements)
+     1. USE DATABASE coco;
+     2. USE SCHEMA bronze;
+     3. CREATE OR REPLACE TABLE baan_ap_invoices (
+     4. INSERT INTO baan_ap_invoices VALUES
+DEPLOY     01_bronze_sources/04_workday_ap_invoices.sql   (4 statements)
+     1. USE DATABASE coco;
+     2. USE SCHEMA bronze;
+     3. CREATE OR REPLACE TABLE workday_ap_invoices (
+     4. INSERT INTO workday_ap_invoices VALUES
+DEPLOY     02_silver/00_reporting_calendar.sql   (3 statements)
+     1. USE ROLE SYSADMIN;
+     2. CREATE TABLE IF NOT EXISTS coco.silver.reporting_calendar (           
+     3. MERGE INTO coco.silver.reporting_calendar AS target                  
+DEPLOY     02_silver/01_dt_silver_ap_invoices.sql   (3 statements)
+     1. USE DATABASE coco;
+     2. USE SCHEMA silver;
+     3. CREATE OR REPLACE DYNAMIC TABLE dt_silver_ap_invoices
+DEPLOY     02_silver/02_dt_vendor_invoice_summary.sql   (3 statements)
+     1. USE DATABASE coco;
+     2. USE SCHEMA silver;
+     3. CREATE OR REPLACE DYNAMIC TABLE dt_vendor_invoice_summary
+DEPLOY     03_semantic_view/01_sv_ap_analytics.sql   (3 statements)
+     1. USE DATABASE coco;
+     2. USE SCHEMA semantic;
+     3. CREATE OR REPLACE SEMANTIC VIEW sv_ap_analytics
+DEPLOY     03_semantic_view/02_cs_ap_invoice_search.sql   (3 statements)
+     1. USE DATABASE coco;
+     2. USE SCHEMA agent;
+     3. CREATE OR REPLACE CORTEX SEARCH SERVICE ap_invoice_search
+DEPLOY     04_mcp/00b_fix_ap_invoice_agent.sql   (6 statements)
+     1. USE ROLE SYSADMIN;
+     2. CREATE AGENT IF NOT EXISTS coco.agent.ap_invoice_agent                
+     3. ALTER AGENT coco.agent.ap_invoice_agent                               
+     4. ALTER AGENT coco.agent.ap_invoice_agent SET                           
+     5. SHOW GRANTS ON AGENT coco.agent.ap_invoice_agent;
+     6. DESCRIBE AGENT coco.agent.ap_invoice_agent;
+DEPLOY     05_guardrails/01_schema_and_fx_rates.sql   (4 statements)
+     1. USE ROLE SYSADMIN;
+     2. USE DATABASE coco;
+     3. CREATE SCHEMA IF NOT EXISTS guardrails                                
+     4. CREATE OR REPLACE VIEW guardrails.fx_rates                            
+DEPLOY     05_guardrails/02_high_value_dmf.sql   (3 statements)
+     1. USE ROLE SYSADMIN;
+     2. USE DATABASE coco;
+     3. CREATE OR REPLACE DATA METRIC FUNCTION guardrails.count_invoices_over_usd_500k(
+DEPLOY     05_guardrails/03_attach_to_silver.sql   (4 statements)
+     1. USE ROLE SYSADMIN;
+     2. ALTER TABLE coco.silver.dt_silver_ap_invoices
+     3. ALTER TABLE coco.silver.dt_silver_ap_invoices
+     4. ALTER TABLE coco.silver.dt_silver_ap_invoices
+DEPLOY     05_guardrails/04_review_queue_view.sql   (3 statements)
+     1. USE ROLE SYSADMIN;
+     2. USE DATABASE coco;
+     3. CREATE OR REPLACE VIEW guardrails.high_value_invoices_for_review
+DEPLOY     06_ci/01_eval_objects.sql   (4 statements)
+     1. USE ROLE SYSADMIN;
+     2. CREATE SCHEMA IF NOT EXISTS coco.eval;
+     3. CREATE TABLE IF NOT EXISTS coco.eval.golden_questions (               
+     4. CREATE STAGE IF NOT EXISTS coco.eval.config_stage;
+MANUAL     90_grants.sql   (see docs/deploy_checklist.md)
+MANUAL     04_mcp/01_mcp_server.sql   (see docs/deploy_checklist.md)
+MANUAL     04_mcp/02_oauth_security_integration.sql   (see docs/deploy_checklist.md)
+MANUAL     05_guardrails/05_email_alert.sql   (see docs/deploy_checklist.md)
+MANUAL     00_setup/01_github_git_integration.sql   (see docs/deploy_checklist.md)
+== 55 deploy statement(s); nothing was executed

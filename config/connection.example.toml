@@ -1,13 +1,13 @@
 # ── Snowflake connection template ─────────────────────────────
 # Copy this file to connection.toml (gitignored) and fill in real values.
-# Used by the Snowflake Python connector / snowsql / snowflake-cli when
-# running scripts/deploy.sh or the eval harness against a real account.
+# Read by scripts/deploy.py and scripts/run_sql_checks.py (the [connections.default]
+# block, or another block via --connection <name>); both sign in with a PAT.
 
-[connections.coco]
+[connections.default]
 account = "<your_account_locator>"          # e.g. "xy12345.us-east-1" — from Snowsight account details
-user = "<your_username>"                    # Snowflake login name
-authenticator = "externalbrowser"           # SSO browser auth; swap for "snowflake" + password if not using SSO
-role = "SYSADMIN"                           # role used to run the setup/DDL scripts
+user = "<your_username>"                    # Snowflake login name that owns the PAT
+authenticator = "PROGRAMMATIC_ACCESS_TOKEN" # sign in with a Personal Access Token
+token = "<your_pat_secret>"                 # PAT secret (ALTER USER ... ADD PROGRAMMATIC ACCESS TOKEN); never commit it
+role = "SYSADMIN"                           # role used to run the deploy and the checks
 warehouse = "wh_coco_pipeline"              # matches sql/00_setup/00_database_schema_warehouse.sql
 database = "coco"                           # matches sql/00_setup/00_database_schema_warehouse.sql
-schema = "raw"                              # default schema; individual scripts USE SCHEMA as needed

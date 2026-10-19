@@ -1,0 +1,9 @@
+-- -- ══════════════════════════════════════════════════════════════════
+    {'STATUS': 'Statement executed successfully.'}
+-- SELECT 'calendar has one row' AS CHECK_NAME, '1' AS EXPECTED,         -- exactly one as-of row
+    {'CHECK_NAME': 'calendar has one row', 'EXPECTED': '1', 'ACTUAL': '1', 'OUTCOME': 'PASS'}
+    {'CHECK_NAME': 'as-of date is 2025-06-30', 'EXPECTED': '2025-06-30', 'ACTUAL': '2025-06-30', 'OUTCOME': 'PASS'}
+    {'CHECK_NAME': 'Silver still has 50 invoices', 'EXPECTED': '50', 'ACTUAL': '50', 'OUTCOME': 'PASS'}
+    {'CHECK_NAME': 'rollup overdue invoices = 44', 'EXPECTED': '44', 'ACTUAL': '44', 'OUTCOME': 'PASS'}
+    {'CHECK_NAME': 'rollup overdue amount matches Silver', 'EXPECTED': 'equal', 'ACTUAL': 'equal', 'OUTCOME': 'PASS'}
+== attempt 1: 0 FAIL row(s)

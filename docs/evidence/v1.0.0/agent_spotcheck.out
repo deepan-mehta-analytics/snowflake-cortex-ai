@@ -1,0 +1,22 @@
+### What date is this data as of?
+This data is a snapshot as of **2025-06-30**. Date-relative questions (such as overdue, recent, etc.) are evaluated against that date.
+
+### Which vendors have the most overdue invoices?
+As of the 2025-06-30 reporting snapshot, **CloudScale Analytics** has the most overdue invoices with 3. A group of vendors follow with 2 overdue invoices each. This covers all source systems (SAP, Oracle, Baan, Workday) via the vendor summary.
+
+
+
+Note: overdue amounts are in the invoices' original currencies (USD, EUR, GBP) and are not converted, so the amount column shouldn't be summed across vendors.
+
+Vendors with the Most Overdue Invoices (as of 2025-06-30)
+VENDOR_NAME, OVERDUE_INVOICES, TOTAL_OVERDUE_AMOUNT
+CloudScale Analytics, 3, 66000.00
+Express Logistics Inc, 2, 14150.00
+Premier Office Solutions, 2, 8800.00
+Nordic Metals AB, 2, 58700.00
+TechServ Solutions, 2, 90000.00
+UK Safety Supplies Ltd, 2, 7300.00
+Summit Energy Corp, 2, 138700.00
+Deutsche Industrie Werke, 2, 62100.00
+Acme Industrial Supply, 2, 19700.00
+Yorkshire Chemical Ltd, 2, 18400.00
