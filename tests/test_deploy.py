@@ -132,6 +132,12 @@ def test_agent_file_splits_into_create_and_alter():
     assert len(create) == 1 and len(alter) == 1                  # exactly one of each
     assert "AP_INVOICE_SEARCH" in alter[0] and "2025-06-30" in alter[0]  # whole spec in one statement
 
+def test_agent_computes_totals_in_sql_everywhere():
+    """The agent must total in SQL, not by hand: q11 runs summed USD in prose and got it wrong."""
+    rule = "never add numbers up yourself"                       # wording shared by both copies
+    for rel in ("sql/04_mcp/00b_fix_ap_invoice_agent.sql", "cortex_project/ap_invoice_agent.agent.yaml"):
+        assert rule in (ROOT / rel).read_text(encoding="utf-8"), rel  # live spec and CLI copy agree
+
 def test_guardrail_attach_leaves_schedule_off():
     """Re-attaching the BR-004 DMF on deploy must not restart daily serverless spend."""
     statements = ["".join(s.split()).upper().rstrip(";") for s in split_statements((ROOT / "sql/05_guardrails/03_attach_to_silver.sql").read_text(encoding="utf-8"))]  # whitespace + trailing ';' removed

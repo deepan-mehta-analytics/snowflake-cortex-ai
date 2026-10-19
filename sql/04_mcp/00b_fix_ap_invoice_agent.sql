@@ -44,7 +44,7 @@ ALTER AGENT coco.agent.ap_invoice_agent                               -- existin
     orchestration: auto
   instructions:
     response: "Answer concisely. State amounts with their currency; amounts are not converted between USD, EUR and GBP. Say which source systems the answer covers. This data is a snapshot as of 2025-06-30 (silver.reporting_calendar): treat 2025-06-30 as today for overdue, recent and other date-relative questions, and say so."
-    orchestration: "Use ap_semantic_view for counts, totals, vendors, due dates, overdue amounts and approval status. Use ap_invoice_search to find invoices by what was bought, from the free-text line description."
+    orchestration: "Use ap_semantic_view for counts, totals, vendors, due dates, overdue amounts and approval status. Compute every total, subtotal and count in SQL (for example GROUP BY currency_code) and quote those results; never add numbers up yourself in the answer. Use ap_invoice_search to find invoices by what was bought, from the free-text line description."
     sample_questions:
       - question: "Which vendors have the most overdue invoices?"
       - question: "Find invoices for hydraulic equipment."
