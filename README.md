@@ -2,11 +2,29 @@
 
 ## ⚡ Quick Summary
 
-This pipeline ingests accounts-payable invoices from four disconnected ERP/AP systems — SAP, Oracle, Baan, and Workday — and conforms them into a single, always-fresh Silver view of what the business owes. Snowflake Dynamic Tables handle the incremental transformation from bronze landing tables through to a vendor-level rollup, with source-specific quirks (status vocabularies, a known Baan duplicate-extract issue, dropped system-specific columns) handled per a set of documented, finance-approved business rules rather than ad hoc judgment calls.
-
-On top of that pipeline sits a Snowflake Cortex Agent grounded in a native Semantic View: it answers quantitative questions ("which vendors have the most overdue invoices, and how much") via text-to-SQL against governed business metrics, with "overdue" measured at a fixed reporting date (2025-06-30) so answers stay the same however long the demo sits. A 19-question golden set — covering core questions, rephrasings, edge cases, deliberately ambiguous questions the agent should push back on, a free-text search question and a hallucination trap — is scored by Snowflake's native Cortex Agent Evaluations (an LLM judge) in GitHub Actions, and a push that drops answer quality below the recorded baseline fails the build, so answer quality is measured, not assumed. The whole account is rebuilt by a re-runnable deploy runner plus a written checklist with a grant check, and the live results are kept in `docs/evidence/` so they outlive the trial account. The same agent is also published through a Snowflake-managed MCP server, so Claude can query it directly over OAuth as a least-privilege Snowflake user. A data-quality guardrail (BR-004) watches the Silver invoices for anything over USD 500,000 at the invoice-date exchange rate: a Data Metric Function with a Finance-owned tolerance, a review queue of flagged invoices, and a daily email alert — proven against seeded boundary cases before being trusted, then run live for 10 days.
+An accounts-payable data platform built entirely inside **Snowflake**: invoices from four disconnected ERP systems become one governed view that a non-technical user can question in plain English, with answer quality measured on every change.
 
 ### Multi-source AP invoices → Dynamic Tables → Semantic View → Cortex Agent → MCP for Claude, guarded by data-quality checks and a CI evaluation gate
+
+#### 🏗️ The pipeline
+
+- 📥 **Four sources, one view** — invoices from **SAP, Oracle, Baan and Workday** are conformed into a single Silver view of what the business owes
+- 🔄 **Dynamic Tables** — incremental bronze → Silver → vendor rollup, with no external orchestrator
+- 📏 **Rule-driven** — source quirks (status vocabularies, a known Baan duplicate-extract issue, system-specific columns) are handled by documented, finance-approved business rules, not ad hoc judgement
+- 📅 **Fixed reporting date** — "overdue" is measured at **2025-06-30**, so answers stay the same however long the demo sits
+
+#### 🤖 The agent
+
+- 💬 **Plain-English answers** — a **Cortex Agent** grounded in a native **Semantic View** answers questions like *"which vendors have the most overdue invoices, and how much?"* through text-to-SQL over governed metrics
+- 🔍 **Free-text search** — **Cortex Search** finds invoices by what was bought
+- 🔌 **Available in Claude** — the same agent is published through a Snowflake-managed **MCP server**, over OAuth as a least-privilege Snowflake user
+
+#### ✅ Quality and trust
+
+- 🧪 **CI evaluation gate** — a **19-question** golden set (core questions, rephrasings, edge cases, deliberately ambiguous questions, a search question and a hallucination trap) is scored by Snowflake's native **LLM judge** in GitHub Actions; a drop below the recorded baseline fails the build
+- 🛡️ **BR-004 data-quality guardrail** — a Data Metric Function flags invoices over **USD 500,000** at the invoice-date exchange rate, with a Finance-owned tolerance, a review queue and a daily email alert; proven on seeded boundary cases, then run live for 10 days
+- 🚀 **Re-runnable deploy** — a deploy runner plus a written checklist and a **34-point grant check** rebuild the account
+- 🗂️ **Preserved evidence** — the live results are kept in `docs/evidence/`, so they outlive the trial account
 
 ---
 
@@ -29,20 +47,35 @@ On top of that pipeline sits a Snowflake Cortex Agent grounded in a native Seman
 
 This project implements **a governed, agent-queryable accounts-payable data platform entirely inside Snowflake** — no external orchestrator, no separate vector database, no copy of the data outside the warehouse.
 
-It implements:
+### 🗄️ Data pipeline
 
-- **4-source bronze ingestion** — SAP, Oracle, Baan, and Workday AP invoice tables, each keeping its native column shape and loaded with realistic synthetic sample data (50 invoices total, 3 currencies)
-- **Rule-driven Silver conformance via Dynamic Tables** — a single union/normalize layer implementing 9 documented business rules (status normalization, no currency conversion, Baan duplicate handling, dropped system-specific columns, `TARGET_LAG = DOWNSTREAM`), plus a vendor-level rollup
-- **A fixed reporting date** — `silver.reporting_calendar` holds one as-of date, 2025-06-30 (44 of the 50 invoices overdue, 6 not yet due); the vendor rollup, the semantic view and the agent's instructions all measure "overdue" against it instead of today's date
-- **A native Semantic View** — business-friendly facts, dimensions, and metrics (`total_spend`, `overdue_by_vendor`, etc.) that ground natural-language questions in governed SQL instead of ad hoc joins
-- **A Cortex Search service** — semantic search over free-text invoice line descriptions (`ap_invoice_search`), for fuzzy lookups that don't map cleanly to a `WHERE` clause
-- **A Cortex Agent** — Cortex Analyst (text-to-SQL over the semantic view) plus Cortex Search, answering both quantitative and free-text AP questions
-- **A Snowflake-managed MCP server** — `coco.mcp.ap_invoice_mcp` exposes the agent, Cortex Analyst and Cortex Search as 3 MCP tools, connected to Claude (claude.ai custom connector) via Snowflake OAuth as a dedicated user pinned to a narrow read-only role
-- **A BR-004 data-quality guardrail** — a Data Metric Function on Silver counts invoices over USD 500,000 at the invoice-date FX rate (Snowflake's free ECB/BIS dataset, latest rate on or before the invoice date), plus any it can't assess (fail-safe); an expectation fails above a Finance-owned tolerance of 2; a review-queue view lists every flagged invoice; a serverless alert emails when the tolerance is breached; a one-off task stopped it all after a 10-day run (2026-10-13)
-- **A CI evaluation gate** — a 19-question golden set with ground-truth answers (core / rephrasings / edge cases / deliberately ambiguous / data-validation, incl. a search question and a hallucination trap) scored by native Cortex Agent Evaluations (`answer_correctness` + `logical_consistency`, LLM judge) in GitHub Actions as a least-privilege service user; a mean drop of more than 0.10 below the committed baseline fails the run. Offline lint + 55 unit tests run on every push
-- **A re-runnable deploy** — `scripts/deploy.py` applies the SQL in `sql/deploy_manifest.txt` order over a PAT as SYSADMIN; everything that needs ACCOUNTADMIN or a secret is a numbered step in `docs/deploy_checklist.md`, and `sql/91_check_grants.sql` proves every grant is back after a deploy
-- **Preserved evidence** — `docs/evidence/v1.0.0/` keeps the gate results, judge scores, grant and reporting-date checks from the live account, leak-scanned before commit
-- **A local smoke-test harness** — the original heuristic keyword/shape checks (`eval/run_eval.py`) for quick manual runs; not the gate
+- 📥 **4-source bronze ingestion** — SAP, Oracle, Baan and Workday AP invoice tables, each keeping its native column shape, loaded with realistic synthetic sample data (50 invoices, 3 currencies)
+- 🔄 **Rule-driven Silver conformance via Dynamic Tables** — one union/normalize layer implementing 9 documented business rules (status normalization, no currency conversion, Baan duplicate handling, dropped system-specific columns, `TARGET_LAG = DOWNSTREAM`), plus a vendor-level rollup
+- 📅 **A fixed reporting date** — `silver.reporting_calendar` holds one as-of date, 2025-06-30 (44 of the 50 invoices overdue, 6 not yet due); the rollup, the semantic view and the agent's instructions all measure "overdue" against it instead of today's date
+
+### 🤖 AI layer
+
+- 🧭 **A native Semantic View** — business-friendly facts, dimensions and metrics (`total_spend`, `overdue_by_vendor`, …) that ground natural-language questions in governed SQL instead of ad hoc joins
+- 🔍 **A Cortex Search service** — semantic search over free-text invoice line descriptions (`ap_invoice_search`), for fuzzy lookups that don't map cleanly to a `WHERE` clause
+- 🤖 **A Cortex Agent** — Cortex Analyst (text-to-SQL over the semantic view) plus Cortex Search, answering both quantitative and free-text AP questions; amount totals are computed in SQL
+- 🔌 **A Snowflake-managed MCP server** — `coco.mcp.ap_invoice_mcp` exposes the agent, Cortex Analyst and Cortex Search as 3 MCP tools, connected to Claude (claude.ai custom connector) via Snowflake OAuth as a dedicated user pinned to a narrow read-only role
+
+### 🛡️ Data quality
+
+- 💵 **A BR-004 high-value invoice guardrail** — a Data Metric Function on Silver counts invoices over USD 500,000 at the invoice-date FX rate (Snowflake's free ECB/BIS dataset, latest rate on or before the invoice date), plus any it can't assess (fail-safe)
+  - An expectation fails above a Finance-owned tolerance of 2, and a review-queue view lists every flagged invoice
+  - A serverless alert emails when the tolerance is breached; a one-off task stopped it all after a 10-day run (2026-10-13)
+
+### ✅ Testing, deploy and evidence
+
+- 🧪 **A CI evaluation gate** — a 19-question golden set with ground-truth answers, scored by native Cortex Agent Evaluations (`answer_correctness` + `logical_consistency`, LLM judge) in GitHub Actions as a least-privilege service user
+  - A mean drop of more than 0.10 below the committed baseline fails the run
+  - Offline lint + 55 unit tests run on every push
+- 🚀 **A re-runnable deploy** — `scripts/deploy.py` applies the SQL in `sql/deploy_manifest.txt` order over a PAT as SYSADMIN
+  - Everything that needs ACCOUNTADMIN or a secret is a numbered step in `docs/deploy_checklist.md`
+  - `sql/91_check_grants.sql` proves every grant is back after a deploy
+- 🗂️ **Preserved evidence** — `docs/evidence/v1.0.0/` keeps the gate results, judge scores, grant and reporting-date checks from the live account, leak-scanned before commit
+- 🩺 **A local smoke-test harness** — the original heuristic keyword/shape checks (`eval/run_eval.py`) for quick manual runs; not the gate
 
 ---
 
@@ -50,20 +83,20 @@ It implements:
 
 | Layer | Tool | Purpose |
 |---|---|---|
-| Warehouse / Storage | Snowflake | Single platform for storage, transformation, and AI serving |
-| Transformation | Dynamic Tables | Declarative, auto-refreshed incremental pipeline (no dbt/Airflow needed) |
-| Semantic layer | Snowflake Semantic View | Governed facts/dimensions/metrics grounding the agent's text-to-SQL tool |
-| Structured Q&A | Cortex Analyst | Text-to-SQL tool bound to the semantic view |
-| Unstructured Q&A | Cortex Search | Semantic search over free-text invoice line descriptions |
-| Orchestrating agent | Cortex Agents (REST API) | Wraps the Analyst and Search tools in one conversational interface |
-| AI client access | Snowflake-managed MCP server + Snowflake OAuth | Exposes agent / Analyst / Search as MCP tools to Claude under a least-privilege role |
-| Agent client / smoke test | Python 3.11 (project `.venv`), `requests` | Runs the registered agent over the Agents REST API; heuristic local smoke test |
-| Evaluation | Cortex Agent Evaluations (`EXECUTE_AI_EVALUATION`, LLM judge pinned to metric version `v3`) | `answer_correctness` + `logical_consistency` gate against `eval/baseline.json` |
-| CI | GitHub Actions (`ci.yml`, `live-eval.yml`), `ruff`, `pytest` | Offline lint + unit tests on every push; live evaluation on agent/SQL/eval changes |
-| Data quality | Data Metric Function + expectation, Snowflake Alert, serverless Task | BR-004 high-value invoice guardrail, daily email, 10-day auto-stop (ran 2026-10-03 → 2026-10-13) |
-| FX rates | Snowflake Public Data (free) — ECB/BIS daily rates | USD-equivalent amounts at the invoice-date rate |
-| Direct SQL checks (dev) | `snowflake-connector-python` with PAT auth, `scripts/run_sql_checks.py` | Live verification queries and pass/fail SQL checks; installed via `requirements-dev.txt` |
-| Deployment | `scripts/deploy.py` (PAT, `sql/deploy_manifest.txt`) + `docs/deploy_checklist.md` | Re-runnable SYSADMIN deploy in manifest order; ACCOUNTADMIN / secret steps by hand; `sql/91_check_grants.sql` verifies grants |
+| ❄️ **Warehouse / Storage** | ![Snowflake](https://img.shields.io/badge/Snowflake-29B5E8?style=flat-square&logo=snowflake&logoColor=white) | Single platform for storage, transformation, and AI serving |
+| 🔄 **Transformation** | ![Dynamic Tables](https://img.shields.io/badge/Dynamic_Tables-0F6CBD?style=flat-square&logo=snowflake&logoColor=white) | Declarative, auto-refreshed incremental pipeline (no dbt/Airflow needed) |
+| 🧭 **Semantic layer** | ![Semantic View](https://img.shields.io/badge/Semantic_View-1E8E8E?style=flat-square&logo=snowflake&logoColor=white) | Governed facts/dimensions/metrics grounding the agent's text-to-SQL tool |
+| 📊 **Structured Q&A** | ![Cortex Analyst](https://img.shields.io/badge/Cortex_Analyst-6E56CF?style=flat-square&logo=snowflake&logoColor=white) | Text-to-SQL tool bound to the semantic view |
+| 🔍 **Unstructured Q&A** | ![Cortex Search](https://img.shields.io/badge/Cortex_Search-8E44AD?style=flat-square&logo=snowflake&logoColor=white) | Semantic search over free-text invoice line descriptions |
+| 🤖 **Orchestrating agent** | ![Cortex Agents](https://img.shields.io/badge/Cortex_Agents-REST_API-5B2C83?style=flat-square&logo=snowflake&logoColor=white) | Wraps the Analyst and Search tools in one conversational interface |
+| 🔌 **AI client access** | ![MCP](https://img.shields.io/badge/MCP_Server-OAuth-D97757?style=flat-square&logo=anthropic&logoColor=white) | Snowflake-managed MCP server + Snowflake OAuth: agent / Analyst / Search as MCP tools for Claude under a least-privilege role |
+| 🐍 **Agent client / smoke test** | ![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white) ![requests](https://img.shields.io/badge/requests-HTTP-2C3E50?style=flat-square) | Runs the registered agent over the Agents REST API (project `.venv`); heuristic local smoke test |
+| 🧪 **Evaluation** | ![Agent Evaluations](https://img.shields.io/badge/Cortex_Agent_Evaluations-LLM_judge_v3-E67E22?style=flat-square&logo=snowflake&logoColor=white) | `EXECUTE_AI_EVALUATION`: `answer_correctness` + `logical_consistency` gate against `eval/baseline.json` |
+| ⚙️ **CI** | ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white) ![ruff](https://img.shields.io/badge/ruff-D7FF64?style=flat-square&logo=ruff&logoColor=black) ![pytest](https://img.shields.io/badge/pytest-0A9EDC?style=flat-square&logo=pytest&logoColor=white) | `ci.yml`: offline lint + unit tests on every push; `live-eval.yml`: live evaluation on agent/SQL/eval changes |
+| 🛡️ **Data quality** | ![DMF](https://img.shields.io/badge/Data_Metric_Function-Alert_%2B_Task-C0392B?style=flat-square&logo=snowflake&logoColor=white) | BR-004 high-value invoice guardrail: DMF + expectation, serverless alert, daily email, 10-day auto-stop (ran 2026-10-03 → 2026-10-13) |
+| 💱 **FX rates** | ![Snowflake Public Data](https://img.shields.io/badge/Snowflake_Public_Data-ECB_%2F_BIS-27AE60?style=flat-square&logo=snowflake&logoColor=white) | Free daily rates for USD-equivalent amounts at the invoice-date rate |
+| 🔎 **Direct SQL checks (dev)** | ![Snowflake Connector](https://img.shields.io/badge/snowflake--connector--python-PAT-29B5E8?style=flat-square&logo=python&logoColor=white) | `scripts/run_sql_checks.py`: live verification queries and pass/fail SQL checks; installed via `requirements-dev.txt` |
+| 🚀 **Deployment** | ![deploy.py](https://img.shields.io/badge/deploy.py-manifest_%2B_checklist-16A085?style=flat-square&logo=python&logoColor=white) | `scripts/deploy.py` (PAT, `sql/deploy_manifest.txt`) + `docs/deploy_checklist.md`: re-runnable SYSADMIN deploy; ACCOUNTADMIN / secret steps by hand; `sql/91_check_grants.sql` verifies grants |
 
 ---
 
@@ -122,22 +155,22 @@ bronze.sap_ap_   bronze.oracle_   bronze.baan_    bronze.workday_
 
 | Component | Role |
 |---|---|
-| `bronze.*_ap_invoices` | One landing table per source system (SAP, Oracle, Baan, Workday), native column shapes preserved |
-| `dt_silver_ap_invoices` | Dynamic Table unioning all 4 sources into one invoice-header shape, per BR-001..BR-009 |
-| `dt_vendor_invoice_summary` | Dynamic Table rolling invoices up to one row per vendor, incl. pending/overdue exposure |
-| `reporting_calendar` | One-row table holding the as-of date (2025-06-30); the rollup, the semantic view (`as_of_date`) and the agent instructions measure "overdue" against it |
-| `sv_ap_analytics` | Semantic View exposing facts/dimensions/metrics to Cortex Analyst |
-| `ap_invoice_search` | Cortex Search service over `line_description`, for fuzzy/semantic invoice lookup |
-| `ap_invoice_agent` | Cortex Agent wrapping the Analyst and Search tools behind one conversational interface |
-| `ap_invoice_mcp` | Snowflake-managed MCP server publishing the agent, Analyst and Search as tools for Claude |
-| `mcp_claude_oauth` / `mcp_claude_role` | OAuth integration + least-privilege role the Claude connector signs in with (read access to Silver + semantic view only) |
-| `guardrails.fx_rates` | View over Snowflake's free FX dataset: one USD rate per currency per day (weak currencies use 1 ÷ USD→X to keep precision) |
-| `guardrails.count_invoices_over_usd_500k` | Data Metric Function: invoices > USD 500,000 at the invoice-date rate, plus unassessable ones (no rate / no amount) |
-| `guardrails.high_value_invoices_for_review` | Review queue: every flagged invoice with USD amount, rate, rate date/age and reason |
-| `guardrails.alert_high_value_invoice_volume` | Serverless alert: emails when the expectation (`VALUE <= 2`) is violated |
-| `guardrails.task_auto_stop_guardrail` | One-off task that ran 2026-10-13 07:30 UTC: suspended the alert, cleared the DMF schedule, suspended itself (verified 2026-10-19) |
-| `eval.golden_questions` / `eval.config_stage` | Golden questions with ground truth, and the rendered evaluation config the run reads |
-| `ci_eval_user` / `ci_eval_role` | SERVICE user + role-restricted PAT GitHub Actions connects with: agent, its tools and the `eval` schema only |
+| 📥 `bronze.*_ap_invoices` | One landing table per source system (SAP, Oracle, Baan, Workday), native column shapes preserved |
+| 🔄 `dt_silver_ap_invoices` | Dynamic Table unioning all 4 sources into one invoice-header shape, per BR-001..BR-009 |
+| 📊 `dt_vendor_invoice_summary` | Dynamic Table rolling invoices up to one row per vendor, incl. pending/overdue exposure |
+| 📅 `reporting_calendar` | One-row table holding the as-of date (2025-06-30); the rollup, the semantic view (`as_of_date`) and the agent instructions measure "overdue" against it |
+| 🧭 `sv_ap_analytics` | Semantic View exposing facts/dimensions/metrics to Cortex Analyst |
+| 🔍 `ap_invoice_search` | Cortex Search service over `line_description`, for fuzzy/semantic invoice lookup |
+| 🤖 `ap_invoice_agent` | Cortex Agent wrapping the Analyst and Search tools behind one conversational interface |
+| 🔌 `ap_invoice_mcp` | Snowflake-managed MCP server publishing the agent, Analyst and Search as tools for Claude |
+| 🔐 `mcp_claude_oauth` / `mcp_claude_role` | OAuth integration + least-privilege role the Claude connector signs in with (read access to Silver + semantic view only) |
+| 💱 `guardrails.fx_rates` | View over Snowflake's free FX dataset: one USD rate per currency per day (weak currencies use 1 ÷ USD→X to keep precision) |
+| 🛡️ `guardrails.count_invoices_over_usd_500k` | Data Metric Function: invoices > USD 500,000 at the invoice-date rate, plus unassessable ones (no rate / no amount) |
+| 📋 `guardrails.high_value_invoices_for_review` | Review queue: every flagged invoice with USD amount, rate, rate date/age and reason |
+| 📧 `guardrails.alert_high_value_invoice_volume` | Serverless alert: emails when the expectation (`VALUE <= 2`) is violated |
+| ⏹️ `guardrails.task_auto_stop_guardrail` | One-off task that ran 2026-10-13 07:30 UTC: suspended the alert, cleared the DMF schedule, suspended itself (verified 2026-10-19) |
+| 🧪 `eval.golden_questions` / `eval.config_stage` | Golden questions with ground truth, and the rendered evaluation config the run reads |
+| ⚙️ `ci_eval_user` / `ci_eval_role` | SERVICE user + role-restricted PAT GitHub Actions connects with: agent, its tools and the `eval` schema only |
 
 ---
 
@@ -327,23 +360,23 @@ The deploy already created the agent (`00b`); checklist steps A4, D1 and D2 run 
 
 ## 🧪 Tests
 
-**Offline** — `ci.yml` runs these on every push and pull request (no Snowflake needed):
+💻 **Offline** — `ci.yml` runs these on every push and pull request (no Snowflake needed):
 
 ```bash
 ruff check .
 python -m pytest tests/      # 55 tests: deploy manifest/runner and SQL rules, gate rules, dataset naming, config rendering, result parsing, exit codes, response parser
 ```
 
-**Live** — four kinds of checks run against the real account:
+☁️ **Live** — four kinds of checks run against the real account:
 
-- **CI evaluation gate** — `live-eval.yml` runs `eval/native_eval.py`: it loads the 19 golden questions into `coco.eval.golden_questions`, starts a native Cortex Agent Evaluation of `COCO.AGENT.AP_INVOICE_AGENT`, and gates the LLM-judge scores against `eval/baseline.json`:
+- 🧪 **CI evaluation gate** — `live-eval.yml` runs `eval/native_eval.py`: it loads the 19 golden questions into `coco.eval.golden_questions`, starts a native Cortex Agent Evaluation of `COCO.AGENT.AP_INVOICE_AGENT`, and gates the LLM-judge scores against `eval/baseline.json`:
   - **Fail (exit 1)** — the mean `answer_correctness` or `logical_consistency` drops more than 0.10 below the baseline
   - **Warn (never fails)** — a single question drops by 0.5 or more, or a baseline question is missing
   - **Infrastructure (exit 2)** — missing secrets or baseline, a bad token, a failed or cancelled run, or any judge row without a successful status (fail closed: it counts as 0)
   - The result table is written to the GitHub run summary and the per-question scores are kept as a 30-day artifact
-- **Deploy checks** — after every deploy, `scripts/run_sql_checks.py sql/91_check_grants.sql` (34 grant checks for the MCP and CI roles) and `sql/02_silver/90_check_reporting_date.sql` (one as-of date, 50 invoices, 44 overdue, rollup matches Silver); exit 1 on any `FAIL` row
-- **Local smoke test** — `eval/run_eval.py` runs the same golden set through the agent's REST API with heuristic keyword/shape checks (`eval/metrics.py`). Quick to read, but not the gate.
-- **BR-004 guardrail checks** — SQL files in `sql/05_guardrails/` return rows of `CHECK_NAME, EXPECTED, ACTUAL, OUTCOME`; `scripts/run_sql_checks.py` runs a file through the PAT and exits 1 if any row is `FAIL`:
+- 🚀 **Deploy checks** — after every deploy, `scripts/run_sql_checks.py sql/91_check_grants.sql` (34 grant checks for the MCP and CI roles) and `sql/02_silver/90_check_reporting_date.sql` (one as-of date, 50 invoices, 44 overdue, rollup matches Silver); exit 1 on any `FAIL` row
+- 🩺 **Local smoke test** — `eval/run_eval.py` runs the same golden set through the agent's REST API with heuristic keyword/shape checks (`eval/metrics.py`). Quick to read, but not the gate.
+- 🛡️ **BR-004 guardrail checks** — SQL files in `sql/05_guardrails/` return rows of `CHECK_NAME, EXPECTED, ACTUAL, OUTCOME`; `scripts/run_sql_checks.py` runs a file through the PAT and exits 1 if any row is `FAIL`:
 
   ```bash
   python scripts/run_sql_checks.py sql/05_guardrails/90_test_fixture.sql          # seeds 6 boundary + 6 edge cases (test schema)
@@ -361,9 +394,9 @@ python -m pytest tests/      # 55 tests: deploy manifest/runner and SQL rules, g
 
 Deployed and evaluated end-to-end against a live Snowflake trial account: first deployed 2026-07-16, with the MCP, guardrail and CI evaluation results below from 2026-10-02 → 2026-10-19. The v1.0.0 files behind these numbers are kept in [`docs/evidence/v1.0.0/`](docs/evidence/v1.0.0/README.md).
 
-**v1.0.0 — deploy and reporting date** (2026-10-19): the re-runnable deploy (`scripts/deploy.py --apply`, 15 files) was verified against the live account, followed by `sql/90_grants.sql`; **34/34 grant checks PASS** and **5/5 reporting-date checks PASS** (as-of 2025-06-30, 50 invoices, 44 overdue). A deploy into an empty account has not been run.
+🚀 **v1.0.0 — deploy and reporting date** (2026-10-19): the re-runnable deploy (`scripts/deploy.py --apply`, 15 files) was verified against the live account, followed by `sql/90_grants.sql`; **34/34 grant checks PASS** and **5/5 reporting-date checks PASS** (as-of 2025-06-30, 50 invoices, 44 overdue). A deploy into an empty account has not been run.
 
-**v1.0.0 — CI evaluation gate** (native Cortex Agent Evaluations, 19 questions, judge metric version `v3`, about $8 of trial credit per run):
+🧪 **v1.0.0 — CI evaluation gate** (native Cortex Agent Evaluations, 19 questions, judge metric version `v3`, about $8 of trial credit per run):
 
 | Run | Agent | answer_correctness | logical_consistency | Outcome |
 |---|---|---|---|---|
@@ -373,9 +406,9 @@ Deployed and evaluated end-to-end against a live Snowflake trial account: first 
 | [Gate 39188322522](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/runs/39188322522), branch | amount totals computed in SQL (`f1e3207`) | 0.93 | 0.97 | ✅ PASS — q11 1.00 / 1.00 |
 | [Gate 39189340822](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/runs/39189340822), `main` | `f1e3207` | 0.91 | 0.93 | ✅ PASS — q11 0.67 again (see Known Limitations) |
 
-**The q11 finding.** For "Which invoices were overdue as of 30 April 2025?" the judge's notes showed the agent found the right 22 invoices and the right EUR and GBP totals, but added the 14 USD amounts in its own answer text and got 679,700 and 657,600 instead of 469,300. The agent instructions now require amount totals to come from SQL (SUM / GROUP BY currency_code), allow small count sums, and stop plan narration leaking into answers. That fixed q11 in 2 of the 3 graded runs since and in 3 of 3 spot checks; the `main` run slipped again (709,300). The full record is in [`q11_totals_record.md`](docs/evidence/v1.0.0/q11_totals_record.md).
+🔎 **The q11 finding.** For "Which invoices were overdue as of 30 April 2025?" the judge's notes showed the agent found the right 22 invoices and the right EUR and GBP totals, but added the 14 USD amounts in its own answer text and got 679,700 and 657,600 instead of 469,300. The agent instructions now require amount totals to come from SQL (SUM / GROUP BY currency_code), allow small count sums, and stop plan narration leaking into answers. That fixed q11 in 2 of the 3 graded runs since and in 3 of 3 spot checks; the `main` run slipped again (709,300). The full record is in [`q11_totals_record.md`](docs/evidence/v1.0.0/q11_totals_record.md).
 
-**Pipeline row counts** (bronze → silver, all verified via `SHOW`/`SELECT` after each step, not just a bare success message):
+🗄️ **Pipeline row counts** (bronze → silver, all verified via `SHOW`/`SELECT` after each step, not just a bare success message):
 
 | Table | Rows |
 |---|---|
@@ -385,7 +418,7 @@ Deployed and evaluated end-to-end against a live Snowflake trial account: first 
 | `bronze.workday_ap_invoices` | 10 |
 | `silver.dt_silver_ap_invoices` | 50 (union of all 4 sources) |
 
-**v0.4.0 — CI evaluation gate** (17 questions, before the reporting date):
+🧪 **v0.4.0 — CI evaluation gate** (17 questions, before the reporting date):
 
 | Run | Who | answer_correctness | logical_consistency | Outcome |
 |---|---|---|---|---|
@@ -394,7 +427,7 @@ Deployed and evaluated end-to-end against a live Snowflake trial account: first 
 
 The judge scored 13 of 17 questions 1.00 on both metrics in the CI run. Lower scores: q11, q12, q13 and q16 at 0.67 `answer_correctness`, and a warning on q11 `logical_consistency` (1.00 → 0.33), which shows the judge's run-to-run variance on the harder questions. The exit-code paths were also proven live: a bad PAT exits 2, a stricter baseline exits 1, and a missing baseline now exits 2 *before* any paid run starts. A full 17-question run costs about **$8 of trial credit**, metered from `METERING_HISTORY` / `USAGE_IN_CURRENCY_DAILY`: 3.6–3.9 AI credits at $2.20 each (Cortex Agents ≈ 2.2–2.3 credits plus the LLM judge's AI inference ≈ 1.4–1.5 credits), plus a few cents of warehouse time.
 
-**Heuristic smoke test** (`eval/run_eval.py` against the live agent, original 15-question set):
+🩺 **Heuristic smoke test** (`eval/run_eval.py` against the live agent, original 15-question set):
 
 | Category | 2026-07-16 (embedded spec, `llama3.1-70b`) | 2026-10-04 (registered agent, model `auto`) |
 |---|---|---|
@@ -407,7 +440,7 @@ The judge scored 13 of 17 questions 1.00 on both metrics in the CI run. Lower sc
 
 On 2026-10-04 the client moved from an embedded spec pinned to `llama3.1-70b` (Snowflake legacy since 2026-08-12, end-of-life no sooner than 2026-10-14) to the registered agent object on Snowflake's recommended `auto` model. "Which vendors are problematic?" now passes: the agent explains that "problematic" isn't defined and grounds its answer in overdue exposure. "Show me recent invoices" still fails the keyword check even though the answer is reasonable (the 20 most recent invoices, latest 2025-06-01). That is a scorer gap, not an agent defect; see Known Limitations.
 
-Sample query, run live on 2026-10-19 via `python cortex_agent/run_agent.py "Which vendors have the most overdue invoices?"` (excerpt; full output in [`agent_spotcheck.out`](docs/evidence/v1.0.0/agent_spotcheck.out)):
+💬 **Sample query**, run live on 2026-10-19 via `python cortex_agent/run_agent.py "Which vendors have the most overdue invoices?"` (excerpt; full output in [`agent_spotcheck.out`](docs/evidence/v1.0.0/agent_spotcheck.out)):
 ```
 As of the 2025-06-30 reporting snapshot, CloudScale Analytics has the most overdue invoices with 3. A group
 of vendors follow with 2 overdue invoices each. This covers all source systems (SAP, Oracle, Baan, Workday)
@@ -422,7 +455,7 @@ Premier Office Solutions, 2, 8800.00
 ```
 Before v1.0.0 the same question measured "overdue" against today's date, so by October 2026 every one of the 50 invoices counted as overdue and the ranking no longer separated vendors.
 
-**MCP smoke test — 3/3 tools working from Claude** (2026-10-02, via the claude.ai connector):
+🔌 **MCP smoke test — 3/3 tools working from Claude** (2026-10-02, via the claude.ai connector):
 
 | MCP tool | Test question | Result |
 |---|---|---|
@@ -430,7 +463,7 @@ Before v1.0.0 the same question measured "overdue" against today's date, so by O
 | `ap-invoice-analyst` | "Which vendors have the highest total invoice amount?" | Correct `SEMANTIC_VIEW(... METRICS total_spend DIMENSIONS vendor_name)` SQL |
 | `ap-invoice-agent` | "How many invoices per source system, and total spend for each?" | Executed SQL: SAP 15 / Oracle 15 / Baan 10 / Workday 10 = 50; spend kept per currency (BR-002) |
 
-**BR-004 guardrail — every check passed live** (2026-10-03 → 2026-10-04, via `scripts/run_sql_checks.py`):
+🛡️ **BR-004 guardrail — every check passed live** (2026-10-03 → 2026-10-04, via `scripts/run_sql_checks.py`):
 
 | Check file | What it proves | Result |
 |---|---|---|
@@ -460,7 +493,7 @@ A test Dynamic Table over the fixture also proved that DMF results on a Dynamic 
 - **The LLM judge varies between runs** (q11 `logical_consistency` went 1.00 → 0.33 between two identical runs in v0.4.0), so the gate compares means with a 0.10 tolerance and only warns on single questions. The v1.0.0 baseline is a single run, accepted after spot checks of the two questions that dropped
 - **Each object re-created by the deploy loses its grants** (`CREATE OR REPLACE`), so `sql/90_grants.sql` must follow every deploy; `sql/91_check_grants.sql` catches a missed step
 - **Model drift under `auto` is caught only when the live eval runs** — on a push to an agent/SQL/eval path or a manual run, not on a schedule
-- **The live eval stops when the trial does** (credit and PAT end 2026-11-11): set `LIVE_EVAL_ENABLED = false` before then so the job is skipped rather than red
+- **The live eval is switched off** (`LIVE_EVAL_ENABLED = false` since 2026-10-19, after v1.0.0 shipped), because the trial credit and PATs end 2026-11-11; pushes skip the job, and the Live eval badge shows the last run
 - Snowsight's Agent Studio UI was unreliable for the registered agent during development (a save bug left it with one tool on the wrong warehouse), so the agent is defined in SQL (`sql/04_mcp/00b_fix_ap_invoice_agent.sql`) with a synced copy in `cortex_project/`. Both `run_agent.py` and the MCP server now run that one object
 - The orchestration model is `auto`, so Snowflake can switch to a newer model without a code change. That protects the client from model retirement, but it also means answer quality can shift silently. The CI evaluation gate is how changes are caught (see the limitation on when it runs above)
 - The MCP connector runs as a dedicated `claude_mcp_user`, because Claude always requests the `session:role:all` OAuth scope and so uses the signed-in user's default role; Cortex usage through the connector is billed to the account like any other Cortex call
@@ -479,7 +512,7 @@ A test Dynamic Table over the fixture also proved that DMF results on a Dynamic 
 - [x] `v0.4.0` — GitHub Actions: offline lint + tests on every push, and a native Cortex Agent Evaluation gate against a committed baseline (shipped 2026-10-04)
 - [x] `v1.0.0` — Deterministic, documented demo: "overdue" measured against a fixed reporting date (2025-06-30) instead of today's date, a re-runnable deploy runner with a checklist and grant check, a 19-question golden set, amount totals computed in SQL, and a committed evidence snapshot that outlives the trial account (shipped 2026-10-19)
 
-**Possible next steps** (not scheduled; the trial account ends 2026-11-11):
+💡 **Possible next steps** (not scheduled; the trial account ends 2026-11-11):
 - Guaranteed per-currency totals — return amount totals from the data itself (for example a semantic-view verified query for "overdue as of a date"), so the agent never adds amounts by hand
 - Cheaper evaluation after the trial — free deterministic checks (counts and totals against the answer keys) on every push, and the paid LLM judge only before a release
 - BR-004 historical-baseline tolerance (rolling average with seasonality) once there is invoice history, replacing the fixed N = 2
