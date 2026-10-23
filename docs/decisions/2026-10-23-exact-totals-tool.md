@@ -58,4 +58,9 @@ computed by the semantic view's generated SQL, and only `invoice_totals` is test
 
 ## Evidence
 
-Filled in at release: [`docs/evidence/v1.1.0/`](../evidence/v1.1.0/).
+[`docs/evidence/v1.1.0/`](../evidence/v1.1.0/README.md): in both gated runs (39917534812 on the branch,
+39918230293 on `main`) q11 scored 1.00 for answer correctness with the right USD 469,300.00, check B
+found every expected total, and both passed against the v1.0.0 baseline on the 19 shared questions.
+The live spot checks found that a Cortex Agent procedure tool must return **one cell** — a
+table-returning procedure is rejected at call time — so both procedures return one JSON value
+(`8278705`).

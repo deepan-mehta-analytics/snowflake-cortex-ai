@@ -25,9 +25,10 @@ Snowsight worksheet (role picker top right). Fill `<placeholders>` **in the work
 
 | # | Role | File / action | Expected result |
 |---|---|---|---|
-| C1 | ACCOUNTADMIN | `90_grants.sql` (Run All) | object grants for both roles restored (CREATE OR REPLACE drops them) |
+| C1 | ACCOUNTADMIN | `90_grants.sql` (Run All) | object grants for both roles restored (CREATE OR REPLACE drops them). Until this runs, every agent question from the MCP or CI role fails, because the agent uses `tool_not_accessible: reject` |
 | C2 | you | `python scripts/run_sql_checks.py sql/91_check_grants.sql` | every row PASS |
 | C3 | you | `python scripts/run_sql_checks.py sql/02_silver/90_check_reporting_date.sql` | every row PASS |
+| C4 | you | `python scripts/run_sql_checks.py sql/07_agent_tools/91_check_invoice_totals.sql` and `…/92_check_review_status.sql` | every row PASS (12 + 6) |
 
 ## D. First deploy only
 

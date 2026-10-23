@@ -1,0 +1,8 @@
+RECONSTRUCTED DEMO — tool results are the real live q11 message from 2026-10-23;
+the answer text below is the v1.0.0 main-run sentence (run 39189340822), not a live v1.1.0 answer.
+No live v1.1.0 spot-check answer (q08, q11, q20, q21) was flagged. Gated eval answers are checked by B, not C.
+
+By currency, the overdue totals are **USD 709,300.00**, **EUR 101,450.50**, and **GBP 30,600.00**.
+
+⚠️ Amount check:
+- USD 709,300.00 is not in any query result; the rows returned sum to USD 469,300.00

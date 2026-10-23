@@ -87,6 +87,9 @@ produced by the one specially tested program, `invoice_totals`. The honest wordi
 
 - **They do not stop the AI from writing a wrong number.** They make sure a wrong number does not
   reach you unnoticed.
+- **They read amounts written in the usual way** — `USD 469,300.00`, `$469,300`, `469,300.00 USD` or
+  a number in a result table. An amount written unusually (negative, or abbreviated like `$0.47M`) is
+  not read, so it is not checked either.
 - **Check C only works in this project's own client** (`cortex_agent/run_agent.py`). If you use the
   same agent through Snowflake's own chat interfaces (Snowflake Intelligence, CoWork) or through
   Claude's connector, the tested calculator is still there, but the after-the-fact check is not.
@@ -101,4 +104,5 @@ produced by the one specially tested program, `invoice_totals`. The honest wordi
 
 - Engineering decision record: [`docs/decisions/2026-10-23-exact-totals-tool.md`](../decisions/2026-10-23-exact-totals-tool.md)
 - The original mistake, run by run: [`docs/evidence/v1.0.0/q11_totals_record.md`](../evidence/v1.0.0/q11_totals_record.md)
-- Results for this version: [`docs/evidence/v1.1.0/`](../evidence/v1.1.0/) (added at release)
+- Results for this version: [`docs/evidence/v1.1.0/`](../evidence/v1.1.0/README.md) — in both scored test
+  runs the q11 total was right (USD 469,300.00) and every expected total was found

@@ -34,7 +34,7 @@ jobs:
     if: vars.LIVE_EVAL_ENABLED == 'true'
     # GitHub-hosted Linux runner.
     runs-on: ubuntu-latest
-    # A 17-question run takes ~10 minutes; 30 leaves headroom for queueing.
+    # A 21-question run took ~5-7 minutes (2026-10-23); 30 leaves headroom for queueing.
     timeout-minutes: 30
     # Connection settings for native_eval.py (CI service user, role-restricted PAT).
     env:
