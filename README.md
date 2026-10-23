@@ -22,7 +22,7 @@ An accounts-payable data platform built entirely inside **Snowflake**: invoices 
 
 #### ✅ Quality and trust
 
-- 🧪 **CI evaluation gate** — a **21-question** golden set (core questions, rephrasings, edge cases, deliberately ambiguous questions, a search question and a hallucination trap) is scored by Snowflake's native **LLM judge** in GitHub Actions; a drop below the recorded baseline fails the build
+- 🧪 **CI evaluation gate** — a **21-question** golden set (core questions, rephrasings, edge cases, deliberately ambiguous questions, a search question, a hallucination trap, a vendor overdue total and a BR-004 review question) is scored by Snowflake's native **LLM judge** in GitHub Actions; a drop below the recorded baseline fails the build
 - 🛡️ **BR-004 data-quality guardrail** — a Data Metric Function flags invoices over **USD 500,000** at the invoice-date exchange rate, with a Finance-owned tolerance, a review queue and a daily email alert; proven on seeded boundary cases, then run live for 10 days
 - 🚀 **Re-runnable deploy** — a deploy runner plus a written checklist and a **38-point grant check** rebuild the account
 - 🗂️ **Preserved evidence** — the live results are kept in `docs/evidence/`, so they outlive the trial account (it ends 2026-11-11)
@@ -45,7 +45,7 @@ An accounts-payable data platform built entirely inside **Snowflake**: invoices 
 [![Data Quality](https://img.shields.io/badge/Data_Quality-DMF_%2B_Alerts-29B5E8?style=for-the-badge&logo=snowflake&logoColor=white)](https://docs.snowflake.com/en/user-guide/data-quality-intro)
 [![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI_%2B_Live_Eval-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions)
-[![Status](https://img.shields.io/badge/Status-Live_on_Snowflake-brightgreen?style=for-the-badge)](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai)
+[![Status](https://img.shields.io/badge/Status-Live_on_Snowflake_until_2026--11--11-brightgreen?style=for-the-badge)](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai)
 
 [![CI](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/workflows/ci.yml)
 [![Live eval](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/workflows/live-eval.yml/badge.svg)](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/workflows/live-eval.yml)
@@ -177,7 +177,7 @@ bronze.sap_ap_   bronze.oracle_   bronze.baan_    bronze.workday_
 | 🧮 `invoice_totals` | Procedure tool: exact per-currency invoice counts and totals, overdue or all, as of a date, optionally for part of a vendor name; returns one JSON cell |
 | 📋 `review_status` | Procedure tool: BR-004 flagged invoices from the review queue plus the largest invoices and their share of the USD 500,000 limit; returns one JSON cell |
 | 🔌 `ap_invoice_mcp` | Snowflake-managed MCP server publishing the agent, Analyst and Search as tools for Claude |
-| 🔐 `mcp_claude_oauth` / `mcp_claude_role` | OAuth integration + least-privilege role the Claude connector signs in with (read access to Silver + semantic view only) |
+| 🔐 `mcp_claude_oauth` / `mcp_claude_role` | OAuth integration + least-privilege role the Claude connector signs in with (read access to Silver + semantic view, USAGE on the two agent tool procedures) |
 | 💱 `guardrails.fx_rates` | View over Snowflake's free FX dataset: one USD rate per currency per day (weak currencies use 1 ÷ USD→X to keep precision) |
 | 🛡️ `guardrails.count_invoices_over_usd_500k` | Data Metric Function: invoices > USD 500,000 at the invoice-date rate, plus unassessable ones (no rate / no amount) |
 | 📋 `guardrails.high_value_invoices_for_review` | Review queue: every flagged invoice with USD amount, rate, rate date/age and reason |
@@ -280,9 +280,9 @@ snowflake-cortex-ai/
 │   └── ap_invoice_agent.agent.yaml              ← live spec of the registered agent (matches sql/04_mcp/00b; orchestration model `auto`)
 │
 ├── tests/
-│   ├── test_deploy.py                           ← manifest, statement splitting, deploy plan, grants, as-of date, agent spec rules
-│   ├── test_gate.py                             ← gate rules (tolerance, warnings, missing questions)
-│   ├── test_native_eval_offline.py              ← dataset naming, config rendering, result parsing, exit codes
+│   ├── test_deploy.py                           ← manifest, statement splitting, deploy plan, grants, as-of date, agent spec + procedure rules
+│   ├── test_gate.py                             ← gate rules (tolerance, warnings, missing questions, shared-question comparison)
+│   ├── test_native_eval_offline.py              ← dataset naming, config rendering, result parsing, exit codes, saved answers, check B, --compare-baseline
 │   ├── test_metrics.py / test_data_files.py     ← smoke-test heuristics + golden-set file checks (incl. expected totals)
 │   ├── test_amounts.py                          ← amount reader + check B on the real v1.0.0 q11 answers
 │   ├── test_run_agent_parse.py                  ← response parser + check C (synthetic and real v1.1.0 messages)
@@ -379,7 +379,7 @@ python eval/run_eval.py
 3. Record a baseline: Actions → **Live eval** → *Run workflow* with `record_baseline` ticked, download the `native-eval-results` artifact and commit its `baseline.json` as `eval/baseline.json` (or run `python eval/native_eval.py --record-baseline` locally with the same environment variables).
 4. The evaluation dataset must be owned by `ci_eval_role`. If it was first created by another role (for example a local run as SYSADMIN), transfer it: `GRANT OWNERSHIP ON DATASET coco.eval.<dataset> TO ROLE ci_eval_role COPY CURRENT GRANTS` (MODIFY cannot be granted on a dataset).
 
-From then on, every push to `main` that touches `sql/`, `cortex_agent/`, `cortex_project/`, `eval/` or the workflow runs the live evaluation (about $8 of trial credit per run, metered). Set `LIVE_EVAL_ENABLED = false` to turn it off; `sql/06_ci/99_teardown.sql` removes the CI identity.
+From then on, every push to `main` that touches `sql/`, `cortex_agent/`, `cortex_project/`, `eval/` or the workflow runs the live evaluation (about $6–8 of trial credit per run: a 21-question run used about 3 AI credits on 2026-10-23). Set `LIVE_EVAL_ENABLED = false` to turn it off; `sql/06_ci/99_teardown.sql` removes the CI identity.
 
 #### 10. (Optional) Connect the agent to Claude via MCP
 The deploy already created the agent (`00b`); checklist steps A4, D1 and D2 run `sql/04_mcp/00`, `01` and `02` in Snowsight, and `04_verify.sql` checks them (skip `03`). Fill the password/email placeholders in the worksheet only, never in the file. Then in claude.ai → Settings → Connectors → *Add custom connector*, paste the URL printed by `04_verify.sql` (`https://<account>.snowflakecomputing.com/api/v2/databases/COCO/schemas/MCP/mcp-servers/AP_INVOICE_MCP`) and the OAuth client ID/secret from `02`, then sign in as `claude_mcp_user`. `99_teardown.sql` removes everything.
@@ -446,13 +446,13 @@ Run 1 was recorded as the new baseline; Run 2 gated `main` against it (✅ PASS,
 
 | Run | Agent | answer_correctness | logical_consistency | Outcome |
 |---|---|---|---|---|
-| [Baseline 39183731867](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/runs/39183731867), branch | original v1.0.0 instruction | 0.91 | 0.98 | recorded as `eval/baseline.json` |
+| [Baseline 39183731867](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/runs/39183731867), branch | original v1.0.0 instruction | 0.91 | 0.98 | recorded as the v1.0.0 baseline (kept as `eval/baseline_v1_0_0.json`) |
 | [Gate 39185143387](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/runs/39185143387), branch | original | 0.91 | 0.93 | ✅ PASS — judge found a wrong USD total on q11 |
 | [Gate 39186725823](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/runs/39186725823), branch | first totals-in-SQL wording (`1b89293`) | 0.95 | 0.91 | ✅ PASS — q11 fixed; judge marked the agent's small count sums as breaking the too-strict wording |
 | [Gate 39188322522](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/runs/39188322522), branch | amount totals computed in SQL (`f1e3207`) | 0.93 | 0.97 | ✅ PASS — q11 1.00 / 1.00 |
 | [Gate 39189340822](https://github.com/deepan-mehta-analytics/snowflake-cortex-ai/actions/runs/39189340822), `main` | `f1e3207` | 0.91 | 0.93 | ✅ PASS — q11 0.67 again (see Known Limitations) |
 
-🔎 **The q11 finding.** For "Which invoices were overdue as of 30 April 2025?" the judge's notes showed the agent found the right 22 invoices and the right EUR and GBP totals, but added the 14 USD amounts in its own answer text and got 679,700 and 657,600 instead of 469,300. The agent instructions now require amount totals to come from SQL (SUM / GROUP BY currency_code), allow small count sums, and stop plan narration leaking into answers. That fixed q11 in 2 of the 3 graded runs since and in 3 of 3 spot checks; the `main` run slipped again (709,300). The full record is in [`q11_totals_record.md`](docs/evidence/v1.0.0/q11_totals_record.md).
+🔎 **The q11 finding.** For "Which invoices were overdue as of 30 April 2025?" the judge's notes showed the agent found the right 22 invoices and the right EUR and GBP totals, but added the 14 USD amounts in its own answer text and got 679,700 and 657,600 instead of 469,300. The v1.0.0 instruction fix required amount totals to come from SQL (SUM / GROUP BY currency_code), allowed small count sums, and told the agent not to narrate its plan. That fixed q11 in 2 of the 3 graded runs that followed and in 3 of 3 spot checks; the `main` run slipped again (709,300). v1.1.0 replaced the instruction-only fix with the `invoice_totals` tool and the amount checks (results above). The full record is in [`q11_totals_record.md`](docs/evidence/v1.0.0/q11_totals_record.md).
 
 🗄️ **Pipeline row counts** (bronze → silver, all verified via `SHOW`/`SELECT` after each step, not just a bare success message):
 
@@ -539,7 +539,7 @@ A test Dynamic Table over the fixture also proved that DMF results on a Dynamic 
 - **The deploy is proven as a re-run, not from empty.** `scripts/deploy.py --apply` was run against the existing live account three times on 2026-10-19 (15/15 files) and again for v1.1.0 on 2026-10-23 (17/17 files after one syntax fix: `COMMENT` must come before `EXECUTE AS` in a procedure), with grants restored and checked each time. A deploy into a brand-new account, starting from checklist section A, has not been run
 - **CI, not CD:** the workflows test the agent already deployed in the account; they do not deploy SQL or agent changes
 - **The CI user's network policy allows `0.0.0.0/0`,** because GitHub-hosted runners have no fixed IPs. The boundary is the role: the PAT is restricted to `ci_eval_role`, which can read only the agent, its tools and the `eval` schema
-- **The LLM judge varies between runs** (q11 `logical_consistency` went 1.00 → 0.33 between two identical runs in v0.4.0), so the gate compares means with a 0.10 tolerance and only warns on single questions. The v1.0.0 baseline is a single run, accepted after spot checks of the two questions that dropped
+- **The LLM judge varies between runs** (q11 `logical_consistency` went 1.00 → 0.33 between two identical runs in v0.4.0), so the gate compares means with a 0.10 tolerance and only warns on single questions. The v1.0.0 and v1.1.0 baselines are single runs: v1.0.0's was accepted after spot checks of the two questions that dropped, v1.1.0's after passing against v1.0.0 on the 19 shared questions and a second gated run on `main`
 - **Each object re-created by the deploy loses its grants** (`CREATE OR REPLACE`), so `sql/90_grants.sql` must follow every deploy; `sql/91_check_grants.sql` catches a missed step
 - **Model drift under `auto` is caught only when the live eval runs** — on a push to an agent/SQL/eval path or a manual run, not on a schedule
 - **The live eval is switched off** (`LIVE_EVAL_ENABLED = false`; off since 2026-10-19, switched on only for the two v1.1.0 gated runs on 2026-10-23), because the trial credit and PATs end 2026-11-11; pushes skip the job, and the Live eval badge shows the last run
