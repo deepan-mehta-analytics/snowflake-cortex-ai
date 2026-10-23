@@ -40,9 +40,20 @@ separate, already-known issue, not the totals.
 
 ## Cost
 
-Metered on 2026-10-23 before the two gated runs reached the usage views: 1.29 credits (warehouse
-0.66 incl. three deploys, Cortex Agents 0.63 for the spot checks) ≈ $4.40. The two gated runs are
-added once `METERING_DAILY_HISTORY` shows them (it lags by hours); v1.0.0 measured about $8 per
-19-question run.
+All v1.1.0 live work ran on 2026-10-23: three deploys, two rounds of spot checks and the two gated
+runs. Credits from `SNOWFLAKE.ACCOUNT_USAGE.METERING_DAILY_HISTORY` for that day:
+
+| Service | Credits | What used it |
+|---|---|---|
+| `CORTEX_AGENTS` | 3.410 | agent answers: 8 spot checks + 42 eval questions |
+| `AI_INFERENCE` | 2.954 | the LLM judge in the two gated runs |
+| `WAREHOUSE_METERING` | 0.850 | three deploys, SQL checks, procedure and agent SQL |
+| `SERVERLESS_TASK` | 0.005 | evaluation tasks |
+| **Total** | **7.219** | |
+
+Estimated cost ≈ **$17**: 6.36 AI credits at $2.20 (the rate metered for v0.4.0) ≈ $14.00, plus
+0.86 compute credits at ≈ $3.41 ≈ $2.90. This is an estimate from credits: on 2026-10-23 the billed
+view (`ORGANIZATION_USAGE.USAGE_IN_CURRENCY_DAILY`) did not yet include the day's AI or warehouse
+usage. For comparison, v1.0.0 took five paid runs at about $8 each.
 
 The deploy was verified as a re-run over the existing account; a deploy into an empty account has not been run.
