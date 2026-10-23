@@ -130,3 +130,21 @@ def test_procedure_json_text_result_is_backed():
     message = {"content": [{"type": "tool_result", "tool_result": {"name": "invoice_totals", "status": "success",
                             "content": [{"type": "json", "json": {"execution_type": "procedure", "result": cell}}]}}]}
     assert verify_amounts("USD 469,300.00", collect_tool_values(message)) == []  # backed by the JSON inside the cell
+
+# ── Real v1.1.0 messages (spot checks 2026-10-23) ─────────────
+def real_message(name):
+    """A final `response` message captured live from the v1.1.0 agent."""
+    return json.loads((Path(__file__).parent / "fixtures" / "agent_stream" / name).read_text(encoding="utf-8"))
+
+def test_real_answers_are_quiet():
+    """The live q11 and q21 answers quote only figures the tools returned: check C prints nothing."""
+    import run_agent                                                       # module under test
+    for name in ("real_q11.json", "real_q21.json"):                        # both captured answers
+        assert run_agent.check_amounts(real_message(name)) == [], name     # no flags
+
+def test_real_q11_wrong_total_would_be_caught():
+    """On the real tool output, the v1.0.0 mistake (USD 709,300.00) is flagged with the true sum 469,300.00."""
+    message = real_message("real_q11.json")                                # live message
+    values = collect_tool_values(message)                                  # what the tools returned
+    flags = verify_amounts("USD: 14 invoices, 709,300.00 USD", values)     # the old wrong figure
+    assert len(flags) == 1 and flags[0].recomputed == Decimal("469300.00")  # caught, with the right sum
