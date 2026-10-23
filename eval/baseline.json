@@ -1,12 +1,20 @@
 {
-  "recorded": "2026-10-19",
-  "run_name": "ci-4dd2d95a-39183731867",
+  "recorded": "2026-10-23",
+  "run_name": "ci-f6abae67-39917534812",
   "means": {
-    "answer_correctness": 0.9132,
-    "logical_consistency": 0.9826
+    "answer_correctness": 0.9529,
+    "logical_consistency": 0.9529
   },
   "per_question": {
     "q19": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q08": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q02": {
       "answer_correctness": 1.0,
       "logical_consistency": 1.0
     },
@@ -18,17 +26,9 @@
       "answer_correctness": 1.0,
       "logical_consistency": 1.0
     },
-    "q17": {
-      "answer_correctness": 1.0,
-      "logical_consistency": 1.0
-    },
     "q13": {
-      "answer_correctness": 0.67,
-      "logical_consistency": 1.0
-    },
-    "q02": {
       "answer_correctness": 1.0,
-      "logical_consistency": 1.0
+      "logical_consistency": 0.67
     },
     "q05": {
       "answer_correctness": 1.0,
@@ -38,11 +38,23 @@
       "answer_correctness": 1.0,
       "logical_consistency": 1.0
     },
-    "q08": {
+    "q17": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 0.67
+    },
+    "q07": {
       "answer_correctness": 1.0,
       "logical_consistency": 1.0
     },
-    "q07": {
+    "q15": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q20": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
+    "q01": {
       "answer_correctness": 1.0,
       "logical_consistency": 1.0
     },
@@ -50,19 +62,19 @@
       "answer_correctness": 1.0,
       "logical_consistency": 1.0
     },
+    "q10": {
+      "answer_correctness": 1.0,
+      "logical_consistency": 1.0
+    },
     "q12": {
       "answer_correctness": 0.67,
       "logical_consistency": 1.0
     },
-    "q15": {
-      "answer_correctness": 1.0,
+    "q14": {
+      "answer_correctness": 0.67,
       "logical_consistency": 1.0
     },
-    "q18": {
-      "answer_correctness": 1.0,
-      "logical_consistency": 1.0
-    },
-    "q10": {
+    "q21": {
       "answer_correctness": 1.0,
       "logical_consistency": 1.0
     },
@@ -71,15 +83,11 @@
       "logical_consistency": 1.0
     },
     "q11": {
-      "answer_correctness": 0.67,
+      "answer_correctness": 1.0,
       "logical_consistency": 0.67
     },
-    "q01": {
+    "q18": {
       "answer_correctness": 1.0,
-      "logical_consistency": 1.0
-    },
-    "q14": {
-      "answer_correctness": 0.67,
       "logical_consistency": 1.0
     }
   }
