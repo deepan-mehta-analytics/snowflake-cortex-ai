@@ -36,7 +36,7 @@ CREATE AGENT IF NOT EXISTS coco.agent.ap_invoice_agent                -- first d
   $$
   models:
     orchestration: auto
-  $$;
+-- ── Replace the live spec (4 tools; v1.1.0 adds the 2 procedures) ─
 
 -- ── Replace the live spec with both tools ────────────────────────
 ALTER AGENT coco.agent.ap_invoice_agent                               -- existing object, grants untouched
