@@ -79,3 +79,12 @@ def test_summary_escapes_table_breaking_text():
     assert q01_line.count("|") == 6                                        # 5 cells → 6 pipes, none from the note
     assert "\n## injected" not in text                                     # no new heading from the note
     assert "[link](http://x)" not in text                                  # link markup neutralised
+
+# ── Shared-question gate (v1.1.0: 19 → 21 questions) ──────────
+def test_gate_only_ids_ignores_new_questions():
+    """Gating a bigger run against an older baseline uses only the shared ids: new questions are not counted."""
+    bigger = run(0.8, 0.8)                                                 # the two baseline questions, unchanged
+    bigger["q20"] = {"answer_correctness": 0.0, "logical_consistency": 0.0}  # a new question that would drag the mean down
+    result = evaluate_gate(bigger, BASE, only_ids={"q01", "q02"})         # shared ids only
+    assert result.passed and result.run_means == {"answer_correctness": 0.8, "logical_consistency": 0.8}  # q20 left out
+    assert not any("q20" in w for w in result.warnings)                    # and not reported as new here

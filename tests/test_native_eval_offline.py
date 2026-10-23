@@ -1,6 +1,7 @@
 """Offline tests for native_eval.py helpers (no Snowflake connection)."""
 
 # ── Imports ───────────────────────────────────────────────────
+import json                                  # write saved runs
 import os                                    # build import paths
 import sys                                   # extend sys.path
 from pathlib import Path                     # read the real template and dataset
@@ -170,3 +171,43 @@ def test_missing_baseline_exits_2_before_any_paid_run(tmp_path, monkeypatch):
         raise AssertionError("connected to Snowflake without a baseline")
     monkeypatch.setattr(native_eval, "connect", no_connect)                # trap the only network entry point
     assert main(["--baseline", str(tmp_path / "none.json")]) == 2          # setup problem, caught up front
+
+# ── Answers + totals check B (v1.1.0) ─────────────────────────
+from native_eval import parse_outputs, totals_report                       # noqa: E402 — helpers under test
+
+def test_parse_outputs_keeps_one_answer_per_question():
+    """Each question's OUTPUT text is kept once, whatever the number of metric rows."""
+    rows = [dict(row("Which source system has the most invoices?", m, 1.0), OUTPUT="SAP and ORACLE tie") for m in ("answer_correctness", "logical_consistency")]
+    assert parse_outputs(rows, IDS) == {"q03": "SAP and ORACLE tie"}       # one answer for q03
+
+def test_totals_report_covers_only_rows_with_expected_totals():
+    """Check B runs on rows with expected_totals; a missing answer is NOT-FOUND for every currency."""
+    golden = [{"id": "q11", "expected_totals": {"USD": {"count": 14, "amount": "469300.00"}}}, {"id": "q19"}]  # one covered row
+    assert totals_report(golden, {"q11": "USD 709,300.00", "q19": "2025-06-30"}) == {"q11": {"USD": "MISMATCH"}}  # q19 not covered
+    assert totals_report(golden, {}) == {"q11": {"USD": "NOT-FOUND"}}      # no answer saved
+
+def test_totals_check_is_warning_only(tmp_path):
+    """A wrong q11 total is reported in the summary but never changes a passing exit code."""
+    saved = tmp_path / "run.json"                                          # saved run with a wrong q11 total
+    saved.write_text(json.dumps({"scores": {"q11": {"answer_correctness": 1.0, "logical_consistency": 1.0}}, "errors": {},
+                                 "outputs": {"q11": "USD 709,300.00, EUR 101,450.50, GBP 30,600.00"}}), encoding="utf-8")
+    base = tmp_path / "baseline.json"                                      # baseline the run meets
+    base.write_text(json.dumps({"means": {"answer_correctness": 1.0, "logical_consistency": 1.0}, "per_question": {}}), encoding="utf-8")
+    summary = tmp_path / "summary.md"                                      # step-summary file
+    assert main(["--scores-file", str(saved), "--baseline", str(base), "--summary", str(summary)]) == 0  # still passes
+    text = summary.read_text(encoding="utf-8")                             # what CI would show
+    assert "Totals check (warn-only)" in text and "q11 USD MISMATCH" in text  # the warning is visible
+
+def test_compare_baseline_section(tmp_path):
+    """--compare-baseline adds a second verdict on the shared questions; the exit code still comes from --baseline."""
+    saved = tmp_path / "run.json"                                          # run with a new question q20
+    saved.write_text(json.dumps({"scores": {"q01": {"answer_correctness": 1.0, "logical_consistency": 1.0},
+                                            "q20": {"answer_correctness": 1.0, "logical_consistency": 1.0}}, "errors": {}}), encoding="utf-8")
+    base = tmp_path / "baseline.json"                                      # main baseline (passes)
+    base.write_text(json.dumps({"means": {"answer_correctness": 1.0, "logical_consistency": 1.0}, "per_question": {}}), encoding="utf-8")
+    old = tmp_path / "old.json"                                            # older baseline with q01 only
+    old.write_text(json.dumps({"label": "v1.0.0", "means": {"answer_correctness": 1.0, "logical_consistency": 1.0},
+                               "per_question": {"q01": {"answer_correctness": 1.0, "logical_consistency": 1.0}}}), encoding="utf-8")
+    summary = tmp_path / "summary.md"                                      # step-summary file
+    assert main(["--scores-file", str(saved), "--baseline", str(base), "--compare-baseline", str(old), "--summary", str(summary)]) == 0
+    assert "vs v1.0.0 baseline (1 shared questions) — ✅ PASS" in summary.read_text(encoding="utf-8")  # second verdict

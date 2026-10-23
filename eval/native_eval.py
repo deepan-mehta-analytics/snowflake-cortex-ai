@@ -22,6 +22,8 @@ import snowflake.connector                   # Snowflake Python connector (requi
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # import gate.py from eval/
 from gate import METRICS, evaluate_gate, means, render_summary  # noqa: E402 — pure gate (Task 2), after the path insert
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cortex_agent"))  # import the shared amount reader
+from amounts import check_expected_totals  # noqa: E402 — check B (v1.1.0), after the path insert
 
 # ── Paths and names ───────────────────────────────────────────
 EVAL_DIR = Path(__file__).resolve().parent                    # eval/
@@ -80,6 +82,33 @@ def parse_results(rows, id_by_question):
                 metrics[metric] = 0.0                                  # fail closed
                 errors.setdefault(qid, f"{metric}: not scored")        # say why, unless a reason is already recorded
     return scores, errors                                              # per-question scores + error notes
+
+def parse_outputs(rows, id_by_question):
+    """Keep each question's answer text (OUTPUT) once: {qid: text}."""
+    outputs = {}                                                       # qid → answer text
+    for r in rows:                                                     # one row per (record, metric)
+        qid = id_by_question[r["INPUT"]]                               # same mapping as parse_results
+        if r.get("OUTPUT") and qid not in outputs:                     # first non-empty answer wins
+            outputs[qid] = str(r["OUTPUT"])                            # the agent's answer
+    return outputs                                                     # answers per question
+
+def totals_report(golden_rows, outputs):
+    """Check B: {qid: {currency: PASS/MISMATCH/NOT-FOUND}} for rows that carry expected_totals."""
+    report = {}                                                        # qid → verdicts
+    for r in golden_rows:                                              # every golden question
+        if r.get("expected_totals"):                                   # only rows with a single per-currency total
+            report[r["id"]] = check_expected_totals(outputs.get(r["id"], ""), r["expected_totals"])  # missing answer → NOT-FOUND
+    return report                                                      # warn-only data
+
+def render_totals_check(report):
+    """Markdown lines for check B; empty when no row was checked."""
+    if not report:                                                     # nothing covered
+        return ""                                                      # no section
+    lines = ["", "**Totals check (warn-only)** — expected per-currency totals found in the answer text"]  # heading
+    for qid in sorted(report):                                         # stable order
+        for currency, verdict in sorted(report[qid].items()):          # each currency
+            lines.append(f"- {qid} {currency} {verdict}")              # e.g. q11 USD MISMATCH
+    return "\n".join(lines) + "\n"                                     # trailing newline
 
 # ── Live section ──────────────────────────────────────────────
 TERMINAL_OK = {"COMPLETED", "PARTIALLY_COMPLETED"}           # run finished; partial = some records errored (scored 0)
@@ -159,7 +188,7 @@ def run_evaluation(cur, run_name, dataset, template_text):
     columns = [d[0] for d in cur.description]                      # column names
     return [dict(zip(columns, row)) for row in cur.fetchall()]     # rows as dicts
 
-def gate_and_report(rows, scores, errors, args):
+def gate_and_report(rows, scores, errors, args, outputs=None):
     """Gate scores against the baseline file, print + append the summary; return 0 pass, 1 regression, 2 no baseline."""
     baseline_path = Path(args.baseline)                            # committed baseline
     if not baseline_path.exists():                                 # no baseline yet = setup problem, not quality
@@ -168,6 +197,15 @@ def gate_and_report(rows, scores, errors, args):
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))  # committed baseline
     result = evaluate_gate(scores, baseline)                       # pass/fail
     text = render_summary(scores, baseline, result, {r["id"]: r["category"] for r in rows}, errors)  # markdown
+    if args.compare_baseline:                                      # also gate against an older baseline
+        older = json.loads(Path(args.compare_baseline).read_text(encoding="utf-8"))  # e.g. eval/baseline_v1_0_0.json
+        shared = set(scores) & set(older["per_question"])          # questions both runs answered
+        second = evaluate_gate(scores, older, only_ids=shared)     # like-for-like comparison
+        label = older.get("label", Path(args.compare_baseline).stem)  # e.g. v1.0.0
+        verdict = "✅ PASS" if second.passed else "❌ FAIL"         # informational verdict
+        text += f"\n### vs {label} baseline ({len(shared)} shared questions) — {verdict}\n"  # heading
+        text += "".join(f"- {line}\n" for line in second.reasons + second.warnings)  # why, if anything
+    text += render_totals_check(totals_report(rows, outputs or {}))  # check B, warn-only
     print(text)                                                    # CI log
     if args.summary:                                               # GitHub step summary
         with open(args.summary, "a", encoding="utf-8") as handle:  # append, UTF-8
@@ -184,11 +222,12 @@ def main(argv=None):
     parser.add_argument("--baseline", default=str(BASELINE_PATH))  # baseline file to gate against / write
     parser.add_argument("--record-baseline", action="store_true")  # write the baseline instead of gating
     parser.add_argument("--scores-file")                           # re-gate a saved results JSON (no live run, no credits)
+    parser.add_argument("--compare-baseline")                      # second, older baseline gated on shared questions only
     args = parser.parse_args(argv)                                 # parsed flags
     rows = load_golden()                                           # golden questions
     if args.scores_file:                                           # offline re-gate of an earlier run
         saved = json.loads(Path(args.scores_file).read_text(encoding="utf-8"))  # {"scores": ..., "errors": ...}
-        return gate_and_report(rows, saved["scores"], saved["errors"], args)    # same gate path as a live run
+        return gate_and_report(rows, saved["scores"], saved["errors"], args, saved.get("outputs"))  # same gate path as a live run
     if not args.record_baseline and not Path(args.baseline).exists():  # gate run with nothing to gate against
         print(f"infrastructure problem: baseline {args.baseline} not found; record one first", file=sys.stderr)
         return 2                                                   # stop before spending credits
@@ -205,8 +244,10 @@ def main(argv=None):
         print(f"infrastructure problem: {exc}", file=sys.stderr)   # plain message for the CI log
         return 2
     scores, errors = parse_results(raw, {r["question"]: r["id"] for r in rows})  # per-question scores
+    outputs = parse_outputs(raw, {r["question"]: r["id"] for r in rows})  # answer text per question (check B + evidence)
     RESULTS_DIR.mkdir(exist_ok=True)                               # gitignored output dir
-    out = {"run_name": run_name, "dataset": dataset, "scores": scores, "errors": errors, "means": means(scores)}  # run record
+    out = {"run_name": run_name, "dataset": dataset, "scores": scores, "errors": errors, "means": means(scores),
+           "outputs": outputs, "totals_check": totals_report(rows, outputs)}  # run record incl. answers
     (RESULTS_DIR / f"native_{run_name}.json").write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
     if args.record_baseline:                                       # write the baseline, don't gate
         baseline = {"recorded": datetime.date.today().isoformat(), "run_name": run_name,
@@ -214,7 +255,7 @@ def main(argv=None):
         Path(args.baseline).write_text(json.dumps(baseline, indent=2), encoding="utf-8")
         print(f"baseline recorded: {baseline['means']}  errors: {errors}")  # visible in the CI log
         return 0
-    return gate_and_report(rows, scores, errors, args)             # gate this run
+    return gate_and_report(rows, scores, errors, args, outputs)    # gate this run
 
 if __name__ == "__main__":
     sys.exit(main())                                               # exit code for CI

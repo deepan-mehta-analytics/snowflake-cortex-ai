@@ -30,8 +30,16 @@ def means(scores):
     return result                                          # metric → mean
 
 # ── Gate ──────────────────────────────────────────────────────
-def evaluate_gate(scores, baseline):
-    """Compare a run with the baseline; fail only on a mean drop beyond TOLERANCE."""
+def evaluate_gate(scores, baseline, only_ids=None):
+    """Compare a run with the baseline; fail only on a mean drop beyond TOLERANCE.
+
+    only_ids: gate on these questions only (an older, smaller baseline); the
+    baseline means are then recomputed over the same questions.
+    """
+    if only_ids is not None:                               # compare like with like
+        scores = {q: s for q, s in scores.items() if q in only_ids}  # run: shared questions only
+        shared = {q: s for q, s in baseline["per_question"].items() if q in only_ids}  # baseline: same questions
+        baseline = {**baseline, "means": means(shared), "per_question": shared}  # baseline means over them
     run_means = means(scores)                              # this run's means
     reasons, warnings = [], []                             # collected messages
     for metric in METRICS:                                 # check each metric's mean
