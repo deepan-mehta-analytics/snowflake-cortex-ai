@@ -1,0 +1,246 @@
+As of 30 April 2025, **22 invoices** were overdue (due date before that date), spanning all four source systems (SAP, Oracle, Baan, Workday). Amounts are in their original currencies and are not converted.
+
+
+[table]
+```json
+{
+  "columns": [
+    "INVOICE_ID",
+    "VENDOR_NAME",
+    "SOURCE_SYSTEM",
+    "INVOICE_DATE",
+    "DUE_DATE",
+    "APPROVAL_STATUS",
+    "CURRENCY_CODE",
+    "INVOICE_AMOUNT"
+  ],
+  "data": [
+    [
+      "ORA-001",
+      "Midwest Tool \u0026 Die Co",
+      "ORACLE",
+      "2025-01-10",
+      "2025-02-09",
+      "APPROVED",
+      "USD",
+      "34200.00"
+    ],
+    [
+      "SAP-001",
+      "Acme Industrial Supply",
+      "SAP",
+      "2025-01-15",
+      "2025-02-14",
+      "APPROVED",
+      "USD",
+      "12500.00"
+    ],
+    [
+      "WD-001",
+      "CloudScale Analytics",
+      "WORKDAY",
+      "2025-01-20",
+      "2025-02-19",
+      "APPROVED",
+      "USD",
+      "22000.00"
+    ],
+    [
+      "BAN-001",
+      "Nordic Metals AB",
+      "BAAN",
+      "2025-02-01",
+      "2025-03-03",
+      "APPROVED",
+      "EUR",
+      "27500.00"
+    ],
+    [
+      "WD-002",
+      "Premier Office Solutions",
+      "WORKDAY",
+      "2025-02-01",
+      "2025-03-03",
+      "APPROVED",
+      "USD",
+      "5600.00"
+    ],
+    [
+      "SAP-003",
+      "TechServ Solutions",
+      "SAP",
+      "2025-02-01",
+      "2025-03-03",
+      "PENDING",
+      "USD",
+      "45000.00"
+    ],
+    [
+      "ORA-003",
+      "Summit Energy Corp",
+      "ORACLE",
+      "2025-02-05",
+      "2025-03-07",
+      "APPROVED",
+      "USD",
+      "67500.00"
+    ],
+    [
+      "SAP-004",
+      "Acme Industrial Supply",
+      "SAP",
+      "2025-02-10",
+      "2025-03-12",
+      "APPROVED",
+      "USD",
+      "7200.00"
+    ],
+    [
+      "WD-003",
+      "Talent Bridge HR",
+      "WORKDAY",
+      "2025-02-10",
+      "2025-03-12",
+      "APPROVED",
+      "USD",
+      "35000.00"
+    ],
+    [
+      "BAN-002",
+      "Rotterdam Port Services",
+      "BAAN",
+      "2025-02-15",
+      "2025-03-17",
+      "APPROVED",
+      "EUR",
+      "14200.00"
+    ],
+    [
+      "ORA-004",
+      "Midwest Tool \u0026 Die Co",
+      "ORACLE",
+      "2025-02-18",
+      "2025-03-20",
+      "APPROVED",
+      "USD",
+      "15600.00"
+    ],
+    [
+      "ORA-002",
+      "Deutsche Industrie Werke",
+      "ORACLE",
+      "2025-01-20",
+      "2025-03-21",
+      "APPROVED",
+      "EUR",
+      "19800.00"
+    ],
+    [
+      "SAP-002",
+      "Global Parts GmbH",
+      "SAP",
+      "2025-01-22",
+      "2025-03-22",
+      "APPROVED",
+      "EUR",
+      "8750.50"
+    ],
+    [
+      "ORA-006",
+      "Apex Staffing Solutions",
+      "ORACLE",
+      "2025-03-01",
+      "2025-03-31",
+      "APPROVED",
+      "USD",
+      "52000.00"
+    ],
+    [
+      "SAP-006",
+      "CleanTech Environmental",
+      "SAP",
+      "2025-03-01",
+      "2025-03-31",
+      "APPROVED",
+      "USD",
+      "18900.00"
+    ],
+    [
+      "WD-005",
+      "CloudScale Analytics",
+      "WORKDAY",
+      "2025-03-01",
+      "2025-03-31",
+      "APPROVED",
+      "USD",
+      "22000.00"
+    ],
+    [
+      "BAN-004",
+      "Nordic Metals AB",
+      "BAAN",
+      "2025-03-10",
+      "2025-04-09",
+      "APPROVED",
+      "EUR",
+      "31200.00"
+    ],
+    [
+      "SAP-008",
+      "Express Logistics Inc",
+      "SAP",
+      "2025-03-15",
+      "2025-04-14",
+      "APPROVED",
+      "USD",
+      "6800.00"
+    ],
+    [
+      "ORA-008",
+      "National Insurance Brokers",
+      "ORACLE",
+      "2025-03-15",
+      "2025-04-14",
+      "APPROVED",
+      "USD",
+      "125000.00"
+    ],
+    [
+      "SAP-005",
+      "UK Safety Supplies Ltd",
+      "SAP",
+      "2025-02-15",
+      "2025-04-16",
+      "APPROVED",
+      "GBP",
+      "3200.00"
+    ],
+    [
+      "WD-004",
+      "London Legal Partners LLP",
+      "WORKDAY",
+      "2025-02-20",
+      "2025-04-21",
+      "PENDING",
+      "GBP",
+      "18500.00"
+    ],
+    [
+      "ORA-005",
+      "Yorkshire Chemical Ltd",
+      "ORACLE",
+      "2025-02-25",
+      "2025-04-26",
+      "APPROVED",
+      "GBP",
+      "8900.00"
+    ]
+  ]
+}
+```
+[/table]
+
+
+By currency, the overdue totals are **USD 709,300.00**, **EUR 101,450.50**, and **GBP 30,600.00**. Two of the overdue invoices were still pending approval (SAP-003 TechServ Solutions, WD-004 London Legal Partners LLP); the rest were approved.
+
+(Note: this dataset is a snapshot as of 2025-06-30, but your question specified 30 April 2025, so overdue here means due_date earlier than 2025-04-30.)
