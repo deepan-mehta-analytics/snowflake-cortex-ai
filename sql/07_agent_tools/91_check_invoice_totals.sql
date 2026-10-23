@@ -59,3 +59,21 @@ SELECT 'date before the data → 0 rows' AS CHECK_NAME, '0' AS EXPECTED,  -- one
        TO_VARCHAR(COUNT(*)) AS ACTUAL,                                -- rows returned
        IFF(COUNT(*) = 0, 'PASS', 'FAIL') AS OUTCOME                   -- verdict
 FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));                             -- rows from the CALL above
+
+-- ── Part of a vendor name finds the vendor (q08: 'Acme') ─────────
+CALL agent.invoice_totals(NULL, 'all', 'Acme');                       -- what the agent may send for "spend with Acme"
+SELECT 'vendor Acme → Acme Industrial Supply' AS CHECK_NAME,          -- one check
+       'USD 3 / 40700.00 / Acme Industrial Supply' AS EXPECTED,       -- q08 key
+       COALESCE(MAX("CURRENCY_CODE") || ' ' || MAX("INVOICE_COUNT") || ' / ' || MAX("TOTAL_AMOUNT") || ' / ' || MAX("MATCHED_VENDORS"), 'missing') AS ACTUAL,  -- returned
+       IFF(COUNT(*) = 1 AND MAX("CURRENCY_CODE") = 'USD' AND MAX("INVOICE_COUNT") = 3 AND MAX("TOTAL_AMOUNT") = 40700.00
+           AND MAX("MATCHED_VENDORS") = 'Acme Industrial Supply', 'PASS', 'FAIL') AS OUTCOME  -- verdict
+FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));                             -- rows from the CALL above
+
+-- ── Empty strings mean "not given" (a model may send '') ─────────
+CALL agent.invoice_totals('', '', '');                                -- every input empty
+WITH empties AS (SELECT * FROM TABLE(RESULT_SCAN(LAST_QUERY_ID())))   -- rows from that CALL
+SELECT 'empty strings = defaults' AS CHECK_NAME,                      -- one check
+       'identical rows' AS EXPECTED,                                  -- same as the no-argument call
+       (SELECT COUNT(*) FROM (SELECT * FROM agent.default_call MINUS SELECT * FROM empties)) || ' differing rows' AS ACTUAL,  -- rows only in one result
+       IFF((SELECT COUNT(*) FROM (SELECT * FROM agent.default_call MINUS SELECT * FROM empties)) = 0
+           AND (SELECT COUNT(*) FROM agent.default_call) = (SELECT COUNT(*) FROM empties), 'PASS', 'FAIL') AS OUTCOME;  -- verdict

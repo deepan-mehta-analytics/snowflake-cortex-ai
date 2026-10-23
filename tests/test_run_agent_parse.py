@@ -108,3 +108,17 @@ def test_tool_result_values_are_backed():
         "result_set": {"data": [["USD", "14", "469300.00"]], "resultSetMetaData": {"rowType": [
             {"name": "CURRENCY_CODE", "type": "text"}, {"name": "INVOICE_COUNT", "type": "fixed"}, {"name": "TOTAL_AMOUNT", "type": "fixed"}]}}}}]}}]}
     assert verify_amounts("USD 469,300.00 across 14 invoices", collect_tool_values(message)) == []
+
+def test_short_table_row_does_not_crash_check_c():
+    """A row shorter than its rowType (shape surprise) is skipped, not an IndexError."""
+    message = {"content": [result_table(["VENDOR_NAME", "TOTAL_AMOUNT", "CURRENCY_CODE"], [["Acme", "40700.00"]])]}
+    assert verify_amounts("40,700.00", collect_tool_values(message)) == []  # the cell still backs the amount
+
+def test_check_c_failure_never_loses_the_answer(monkeypatch):
+    """If check C itself breaks, the reader gets one 'could not run' flag instead of losing the agent's answer."""
+    import run_agent                                                       # module whose helper we break
+    def broken(message):                                                   # simulate an unexpected shape
+        raise TypeError("unexpected content shape")
+    monkeypatch.setattr(run_agent, "collect_tool_values", broken)          # break check C
+    flags = run_agent.check_amounts({"content": [{"type": "text", "text": "USD 1.00"}]})  # safe wrapper
+    assert len(flags) == 1 and "amount check could not run" in flags[0].reason  # reported, not raised

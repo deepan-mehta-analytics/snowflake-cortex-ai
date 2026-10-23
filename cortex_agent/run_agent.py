@@ -134,7 +134,8 @@ def collect_tool_values(message):
                     amount = to_decimal(row[i]) if i < len(row) else None  # the cell as a number
                     if amount is None:                              # empty or text cell
                         continue                                    # not summable
-                    currency = str(row[currency_col]).upper() if currency_col is not None else None  # row currency
+                    has_currency = currency_col is not None and currency_col < len(row)  # short rows have no currency cell
+                    currency = str(row[currency_col]).upper() if has_currency else None  # row currency
                     currency = currency if currency in CURRENCIES else None  # unknown → None
                     rows, total = per_currency.get(currency, (0, Decimal(0)))  # running count + sum
                     per_currency[currency] = (rows + 1, total + amount)  # add this row
@@ -166,6 +167,13 @@ def answer_text(message):
     """The final message's answer text only (what check C reads)."""
     return "".join(i.get("text", "") for i in message.get("content", []) if i.get("type") == "text").strip()  # text items
 
+def check_amounts(message):
+    """Run check C on a final message; if the check itself breaks, say so instead of losing the answer."""
+    try:
+        return verify_amounts(answer_text(message), collect_tool_values(message))  # normal path
+    except Exception as exc:                                         # unexpected content shape: never hide the answer
+        return [Flag(Amount(None, Decimal(0), (0, 0)), None, f"amount check could not run: {exc}")]  # one visible note
+
 # ── Call the agent ────────────────────────────────────────────
 def run_agent(question: str) -> tuple:
     """Send one question to the registered agent; return (formatted answer, check C flags)."""
@@ -185,7 +193,7 @@ def run_agent(question: str) -> tuple:
             event_name = line[len("event: "):]                     # remember which event is next
         elif line.startswith("data: ") and event_name == "response":  # the final message with the full content list
             message = json.loads(line[len("data: "):])            # the full final message
-            flags = verify_amounts(answer_text(message), collect_tool_values(message))  # check C
+            flags = check_amounts(message)                         # check C (never raises)
             return parse_final_response(message), flags             # answer + any untraceable amounts
         elif line.startswith("data: ") and event_name == "error":  # the agent reported an error mid-stream
             raise RuntimeError(f"agent error: {line[len('data: '):]}")  # surface it instead of returning nothing

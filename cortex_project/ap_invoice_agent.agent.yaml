@@ -20,19 +20,19 @@ tools:
   - tool_spec:
       type: "generic"
       name: "invoice_totals"
-      description: "Returns exact invoice counts and amount totals, one row per currency (currency_code, invoice_count, total_amount, as_of_date, scope). Overdue means issued on or before the as-of date and due before it. Never sums across currencies."
+      description: "Returns exact invoice counts and amount totals, one row per currency (currency_code, invoice_count, total_amount, as_of_date, scope, matched_vendors). Overdue means issued on or before the as-of date and due before it. Never sums across currencies."
       input_schema:
         type: "object"
         properties:
           as_of_date:
             type: "string"
-            description: "As-of date in ISO format, for example 2025-04-30. Leave empty for the reporting as-of date 2025-06-30."
+            description: "As-of date in ISO format, for example 2025-04-30. Omit for the reporting as-of date 2025-06-30."
           scope:
             type: "string"
             description: "overdue (default) for invoices past their due date, or all for every invoice issued by the as-of date."
           vendor_name:
             type: "string"
-            description: "Exact vendor name to restrict the totals to one vendor. Leave empty for all vendors."
+            description: "Vendor name, or part of it (for example Acme), to restrict the totals to matching vendors; matched_vendors in the result names them. Omit for all vendors."
   - tool_spec:
       type: "generic"
       name: "review_status"

@@ -14,13 +14,13 @@ deploy    02_silver/01_dt_silver_ap_invoices.sql
 deploy    02_silver/02_dt_vendor_invoice_summary.sql
 deploy    03_semantic_view/01_sv_ap_analytics.sql
 deploy    03_semantic_view/02_cs_ap_invoice_search.sql
-deploy    04_mcp/00b_fix_ap_invoice_agent.sql
 deploy    05_guardrails/01_schema_and_fx_rates.sql
 deploy    05_guardrails/02_high_value_dmf.sql
 deploy    05_guardrails/03_attach_to_silver.sql
 deploy    05_guardrails/04_review_queue_view.sql
 deploy    07_agent_tools/01_invoice_totals.sql
 deploy    07_agent_tools/02_review_status.sql
+deploy    04_mcp/00b_fix_ap_invoice_agent.sql
 deploy    06_ci/01_eval_objects.sql
 checklist 90_grants.sql
 checklist 04_mcp/01_mcp_server.sql

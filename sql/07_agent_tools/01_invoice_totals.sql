@@ -20,32 +20,37 @@ USE DATABASE coco;                                                    -- project
 
 -- ── Procedure ────────────────────────────────────────────────────
 CREATE OR REPLACE PROCEDURE agent.invoice_totals(
-    as_of_date  VARCHAR DEFAULT NULL,                                 -- ISO date 'YYYY-MM-DD'; NULL = reporting as-of date
-    scope       VARCHAR DEFAULT 'overdue',                            -- 'overdue' or 'all' (every invoice issued by the date)
-    vendor_name VARCHAR DEFAULT NULL                                  -- exact vendor name, any case; NULL = all vendors
+    as_of_date  VARCHAR DEFAULT NULL,                                 -- ISO date 'YYYY-MM-DD'; NULL or '' = reporting as-of date
+    scope       VARCHAR DEFAULT 'overdue',                            -- 'overdue' or 'all' (every invoice issued by the date); NULL or '' = overdue
+    vendor_name VARCHAR DEFAULT NULL                                  -- whole or part of a vendor name, any case ('Acme'); NULL or '' = all vendors
 )
-RETURNS TABLE (currency_code VARCHAR, invoice_count NUMBER, total_amount NUMBER(18,2), as_of_date DATE, scope VARCHAR)  -- one row per currency
+RETURNS TABLE (currency_code VARCHAR, invoice_count NUMBER, total_amount NUMBER(18,2), as_of_date DATE, scope VARCHAR,
+               matched_vendors VARCHAR)                               -- one row per currency, naming the vendor(s) counted
 LANGUAGE SQL                                                          -- Snowflake Scripting
 EXECUTE AS OWNER                                                      -- callers need only USAGE on the procedure
-COMMENT = 'Agent tool: exact invoice counts and amount totals per currency, overdue or all, as of a date'  -- shown in SHOW PROCEDURES
+COMMENT = 'Agent tool: exact invoice counts and amount totals per currency, overdue or all, as of a date, optionally one vendor'  -- shown in SHOW PROCEDURES
 AS
 $$
 DECLARE
-    report_date  DATE;                                                -- the as-of date actually used
-    chosen_scope VARCHAR;                                             -- normalised scope
-    bad_scope    EXCEPTION (-20001, 'scope must be overdue or all');  -- clear error for a wrong scope
-    bad_date     EXCEPTION (-20002, 'as_of_date must be an ISO date like 2025-04-30');  -- clear error for an unreadable date
-    totals       RESULTSET;                                           -- the rows returned to the agent
+    report_date    DATE;                                              -- the as-of date actually used
+    chosen_date    VARCHAR;                                           -- as_of_date with '' treated as not given
+    chosen_scope   VARCHAR;                                           -- normalised scope
+    chosen_vendor  VARCHAR;                                           -- vendor filter with '' treated as not given
+    bad_scope      EXCEPTION (-20001, 'scope must be overdue or all');  -- clear error for a wrong scope
+    bad_date       EXCEPTION (-20002, 'as_of_date must be an ISO date like 2025-04-30');  -- clear error for an unreadable date
+    totals         RESULTSET;                                         -- the rows returned to the agent
 BEGIN
-    chosen_scope := LOWER(COALESCE(:scope, 'overdue'));               -- NULL scope means the default
+    chosen_date   := NULLIF(TRIM(:as_of_date), '');                   -- a model may send '' for "not given"
+    chosen_scope  := LOWER(COALESCE(NULLIF(TRIM(:scope), ''), 'overdue'));  -- NULL or '' means the default
+    chosen_vendor := NULLIF(TRIM(:vendor_name), '');                  -- '' must not filter everything out
     IF (chosen_scope NOT IN ('overdue', 'all')) THEN                  -- only two scopes exist
         RAISE bad_scope;                                              -- stop with the clear message
     END IF;
-    IF (:as_of_date IS NULL) THEN                                     -- no date given
+    IF (chosen_date IS NULL) THEN                                     -- no date given
         SELECT MAX(as_of_date) INTO :report_date                      -- the one reporting as-of date
         FROM coco.silver.reporting_calendar;                          -- 2025-06-30 for this snapshot
     ELSE
-        report_date := TRY_TO_DATE(:as_of_date);                      -- parse the caller's date
+        report_date := TRY_TO_DATE(chosen_date);                      -- parse the caller's date
         IF (report_date IS NULL) THEN                                 -- unreadable date: never fall back silently
             RAISE bad_date;                                           -- stop with the clear message
         END IF;
@@ -55,11 +60,12 @@ BEGIN
                COUNT(*)                         AS invoice_count,     -- invoices in scope
                SUM(invoice_amount)::NUMBER(18,2) AS total_amount,     -- exact total in that currency
                :report_date                     AS as_of_date,        -- echo the date used
-               :chosen_scope                    AS scope              -- echo the scope used
+               :chosen_scope                    AS scope,             -- echo the scope used
+               LISTAGG(DISTINCT vendor_name, ', ') WITHIN GROUP (ORDER BY vendor_name) AS matched_vendors  -- who was counted
         FROM coco.silver.dt_silver_ap_invoices                        -- same Silver table as the semantic view
         WHERE invoice_date <= :report_date                            -- issued by the as-of date
           AND (:chosen_scope = 'all' OR due_date < :report_date)      -- overdue: due before the as-of date
-          AND (:vendor_name IS NULL OR UPPER(vendor_name) = UPPER(:vendor_name))  -- optional vendor filter
+          AND (:chosen_vendor IS NULL OR vendor_name ILIKE '%' || :chosen_vendor || '%')  -- optional vendor filter, part of the name is enough
         GROUP BY currency_code                                        -- never sum across currencies
         ORDER BY currency_code                                        -- stable order: EUR, GBP, USD
     );

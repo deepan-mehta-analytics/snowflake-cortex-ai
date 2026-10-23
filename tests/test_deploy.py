@@ -212,3 +212,34 @@ def test_agent_declares_both_procedure_tools():
 def test_agent_rejects_inaccessible_tools():
     """A role missing a tool grant fails the run instead of silently skipping the tool (default is accept)."""
     assert live_agent_spec()["orchestration"]["tool_not_accessible"] == "reject"  # top-level orchestration key
+
+# ── Review fixes (v1.1.0 final review) ────────────────────────
+def test_agent_spec_deploys_after_its_procedures():
+    """00b names the procedure tools, so it must run after 07_agent_tools creates them (first apply would stop otherwise)."""
+    paths = [rel for _, rel in read_manifest()]                            # deploy order
+    assert paths.index("04_mcp/00b_fix_ap_invoice_agent.sql") > paths.index("07_agent_tools/02_review_status.sql")
+
+def sql_code(rel):
+    """A SQL file with -- comments removed, upper-cased (assert on code, not comments)."""
+    return "\n".join(line.split("--", 1)[0] for line in (ROOT / "sql" / rel).read_text(encoding="utf-8").splitlines()).upper()
+
+def test_invoice_totals_matches_partial_vendor_names_and_says_which():
+    """'Acme' must find Acme Industrial Supply (q08), and the result must name the vendor(s) matched."""
+    code = sql_code("07_agent_tools/01_invoice_totals.sql")                # procedure code
+    assert "ILIKE '%' || :CHOSEN_VENDOR || '%'" in code                    # contains-match, any case
+    assert "MATCHED_VENDORS" in code                                       # output names the matched vendor(s)
+    assert "CALL AGENT.INVOICE_TOTALS(NULL, 'ALL', 'ACME')" in sql_code("07_agent_tools/91_check_invoice_totals.sql")  # live check row
+
+def test_invoice_totals_treats_empty_strings_as_omitted():
+    """A model may send '' for an optional input: it must mean 'not given', never an error or zero rows."""
+    code = sql_code("07_agent_tools/01_invoice_totals.sql")                # procedure code
+    for name in ("AS_OF_DATE", "SCOPE", "VENDOR_NAME"):                    # every input
+        assert f"NULLIF(TRIM(:{name}), '')" in code, name                  # normalised before use
+    assert "CALL AGENT.INVOICE_TOTALS('', '', '')" in sql_code("07_agent_tools/91_check_invoice_totals.sql")  # live check row
+    spec = (ROOT / "cortex_project/ap_invoice_agent.agent.yaml").read_text(encoding="utf-8")  # tool descriptions
+    assert "Leave empty" not in spec                                       # wording invites ''; say "Omit" instead
+
+def test_review_status_percent_fits_huge_invoices():
+    """An invoice typo with extra zeros (≥ USD 500M) is BR-004's own case: the percent column must not overflow."""
+    code = sql_code("07_agent_tools/02_review_status.sql")                 # procedure code
+    assert "NUMBER(6,1)" not in code and "PERCENT_OF_THRESHOLD NUMBER(12,1)" in code  # wide enough

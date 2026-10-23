@@ -22,7 +22,7 @@ CREATE OR REPLACE PROCEDURE agent.review_status(
     top_n NUMBER DEFAULT 3                                            -- how many of the largest invoices to list
 )
 RETURNS TABLE (row_kind VARCHAR, invoice_number VARCHAR, vendor_name VARCHAR, invoice_amount NUMBER(18,2),
-               currency_code VARCHAR, usd_equivalent_amount NUMBER(18,2), percent_of_threshold NUMBER(6,1),
+               currency_code VARCHAR, usd_equivalent_amount NUMBER(18,2), percent_of_threshold NUMBER(12,1),
                review_reason VARCHAR)                                 -- flagged rows first, then the largest
 LANGUAGE SQL                                                          -- Snowflake Scripting
 EXECUTE AS OWNER                                                      -- callers need only USAGE on the procedure
@@ -54,14 +54,14 @@ BEGIN
         SELECT 'flagged' AS row_kind, q.invoice_number, q.vendor_name,             -- every invoice BR-004 flags
                q.invoice_amount::NUMBER(18,2), q.currency_code,                   -- original amount + currency
                q.usd_equivalent_amount::NUMBER(18,2),                             -- USD equivalent (NULL when unassessable)
-               ROUND(q.usd_equivalent_amount / :threshold_usd * 100, 1)::NUMBER(6,1),  -- share of the limit
+               ROUND(q.usd_equivalent_amount / :threshold_usd * 100, 1)::NUMBER(12,1),  -- share of the limit
                q.review_reason                                                    -- why it is in the queue
         FROM coco.guardrails.high_value_invoices_for_review q                     -- the BR-004 rule itself
         UNION ALL
         SELECT 'largest', p.invoice_number, p.vendor_name,                        -- the largest invoices overall
                p.invoice_amount::NUMBER(18,2), p.currency_code,                   -- original amount + currency
                p.usd_equivalent_amount::NUMBER(18,2),                             -- USD equivalent
-               ROUND(p.usd_equivalent_amount / :threshold_usd * 100, 1)::NUMBER(6,1),  -- share of the limit
+               ROUND(p.usd_equivalent_amount / :threshold_usd * 100, 1)::NUMBER(12,1),  -- share of the limit
                NULL                                                               -- not a review reason
         FROM priced p
         WHERE p.usd_equivalent_amount IS NOT NULL                                 -- unassessable ones are already 'flagged'
