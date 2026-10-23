@@ -117,7 +117,7 @@ def test_agent_tools_are_in_the_manifest():
     entries = read_manifest()                                # the real sql/deploy_manifest.txt
     paths = [rel for _, rel in entries]                      # ordered file list
     tags = dict((rel, tag) for tag, rel in entries)          # file → deploy/checklist
-    for rel in ("07_agent_tools/01_invoice_totals.sql",):    # tool files added so far
+    for rel in ("07_agent_tools/01_invoice_totals.sql", "07_agent_tools/02_review_status.sql"):  # both tool files
         assert tags.get(rel) == "deploy", rel                # run by deploy.py --apply
         assert paths.index(rel) > paths.index("05_guardrails/04_review_queue_view.sql"), rel  # after its dependency
         statements = split_statements((ROOT / "sql" / rel).read_text(encoding="utf-8"))  # what deploy.py will send

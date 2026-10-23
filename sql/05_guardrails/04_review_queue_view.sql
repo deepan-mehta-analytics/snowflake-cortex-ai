@@ -4,6 +4,7 @@
 -- Same rule as the DMF (02). Finance works through this list; it is
 -- expected work, not an alert. Silver itself is never filtered.
 -- 93_check_review_rule.sql holds a copy of this body run on the fixture: keep them in sync.
+-- 07_agent_tools/02_review_status.sql reuses this rule (reads this view + copies its FX join): keep in sync.
 
 -- ── Context ──────────────────────────────────────────────────────
 USE ROLE SYSADMIN;                                                    -- owner of the guardrails schema
