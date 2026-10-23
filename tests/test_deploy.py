@@ -164,3 +164,15 @@ def test_checklist_covers_every_checklist_entry():
     for tag, rel in read_manifest():                         # every manifest entry
         if tag == "checklist":                               # manual steps only
             assert rel in text, rel                          # documented
+
+# ── Grants for the agent tool procedures (v1.1.0) ─────────────
+def test_both_roles_get_and_are_checked_for_tool_procedures():
+    """90 grants USAGE on both procedures to the MCP and CI roles; 91 expects each grant (a missing one fails loudly)."""
+    grants = (ROOT / "sql" / "90_grants.sql").read_text(encoding="utf-8").upper()  # grant script
+    check = (ROOT / "sql" / "91_check_grants.sql").read_text(encoding="utf-8").upper()  # grant check
+    for role in ("MCP_CLAUDE_ROLE", "CI_EVAL_ROLE"):                       # both callers of the agent
+        for proc in ("COCO.AGENT.INVOICE_TOTALS(VARCHAR, VARCHAR, VARCHAR)", "COCO.AGENT.REVIEW_STATUS(NUMBER)"):
+            assert f"GRANT USAGE ON PROCEDURE {proc} TO ROLE {role};" in grants, (role, proc)  # granted
+    for name in ("'COCO.AGENT.INVOICE_TOTALS'", "'COCO.AGENT.REVIEW_STATUS'"):  # expected rows in the check
+        assert check.count(name) == 2, name                                # one per role
+    assert "LIKE E.NAME || '(%'" in check                                   # SHOW GRANTS names carry the signature

@@ -18,14 +18,16 @@ WITH actual AS (                                                      -- rows fr
         ('SELECT', 'COCO.SEMANTIC.SV_AP_ANALYTICS'),
         ('SELECT', 'COCO.SILVER.DT_SILVER_AP_INVOICES'), ('SELECT', 'COCO.SILVER.DT_VENDOR_INVOICE_SUMMARY'),
         ('SELECT', 'COCO.SILVER.REPORTING_CALENDAR'),
-        ('USAGE', 'COCO.MCP.AP_INVOICE_MCP')
+        ('USAGE', 'COCO.MCP.AP_INVOICE_MCP'),
+        ('USAGE', 'COCO.AGENT.INVOICE_TOTALS'), ('USAGE', 'COCO.AGENT.REVIEW_STATUS')
 )
 SELECT 'mcp_claude_role ' || e.privilege || ' ' || e.name AS CHECK_NAME,  -- one check per grant
        'granted' AS EXPECTED,                                         -- what we want
        IFF(a.name IS NULL, 'missing', 'granted') AS ACTUAL,           -- what is there
        IFF(a.name IS NULL, 'FAIL', 'PASS') AS OUTCOME                 -- verdict
 FROM expected e                                                       -- every expected grant
-LEFT JOIN actual a ON a.privilege = e.privilege AND a.name = e.name   -- present?
+LEFT JOIN actual a ON a.privilege = e.privilege                      -- present?
+    AND (a.name = e.name OR REPLACE(a.name, '"', '') LIKE e.name || '(%')  -- procedures: SHOW GRANTS adds the signature
 ORDER BY OUTCOME, CHECK_NAME;                                         -- FAILs first
 
 -- ── CI role ──────────────────────────────────────────────────────
@@ -43,12 +45,14 @@ WITH actual AS (                                                      -- rows fr
         ('USAGE', 'COCO.AGENT.AP_INVOICE_AGENT'), ('MONITOR', 'COCO.AGENT.AP_INVOICE_AGENT'),
         ('SELECT', 'COCO.EVAL.GOLDEN_QUESTIONS'), ('INSERT', 'COCO.EVAL.GOLDEN_QUESTIONS'), ('DELETE', 'COCO.EVAL.GOLDEN_QUESTIONS'),
         ('READ', 'COCO.EVAL.CONFIG_STAGE'), ('WRITE', 'COCO.EVAL.CONFIG_STAGE'),
-        ('CREATE DATASET', 'COCO.EVAL'), ('CREATE TASK', 'COCO.EVAL'), ('CREATE FILE FORMAT', 'COCO.EVAL')
+        ('CREATE DATASET', 'COCO.EVAL'), ('CREATE TASK', 'COCO.EVAL'), ('CREATE FILE FORMAT', 'COCO.EVAL'),
+        ('USAGE', 'COCO.AGENT.INVOICE_TOTALS'), ('USAGE', 'COCO.AGENT.REVIEW_STATUS')
 )
 SELECT 'ci_eval_role ' || e.privilege || ' ' || e.name AS CHECK_NAME,  -- one check per grant
        'granted' AS EXPECTED,                                         -- what we want
        IFF(a.name IS NULL, 'missing', 'granted') AS ACTUAL,           -- what is there
        IFF(a.name IS NULL, 'FAIL', 'PASS') AS OUTCOME                 -- verdict
 FROM expected e                                                       -- every expected grant
-LEFT JOIN actual a ON a.privilege = e.privilege AND a.name = e.name   -- present?
+LEFT JOIN actual a ON a.privilege = e.privilege                      -- present?
+    AND (a.name = e.name OR REPLACE(a.name, '"', '') LIKE e.name || '(%')  -- procedures: SHOW GRANTS adds the signature
 ORDER BY OUTCOME, CHECK_NAME;                                         -- FAILs first

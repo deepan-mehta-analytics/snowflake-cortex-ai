@@ -21,6 +21,8 @@ GRANT SELECT ON SEMANTIC VIEW coco.semantic.sv_ap_analytics TO ROLE mcp_claude_r
 GRANT SELECT ON DYNAMIC TABLE coco.silver.dt_silver_ap_invoices TO ROLE mcp_claude_role;      -- Silver invoices
 GRANT SELECT ON DYNAMIC TABLE coco.silver.dt_vendor_invoice_summary TO ROLE mcp_claude_role;  -- vendor rollup
 GRANT SELECT ON TABLE coco.silver.reporting_calendar TO ROLE mcp_claude_role;                 -- as-of date (v1.0.0)
+GRANT USAGE ON PROCEDURE coco.agent.invoice_totals(VARCHAR, VARCHAR, VARCHAR) TO ROLE mcp_claude_role;  -- agent tool: exact totals (v1.1.0)
+GRANT USAGE ON PROCEDURE coco.agent.review_status(NUMBER) TO ROLE mcp_claude_role;  -- agent tool: BR-004 review status (v1.1.0)
 
 -- ── CI role: native agent evaluation ─────────────────────────────
 GRANT USAGE ON WAREHOUSE wh_coco_pipeline TO ROLE ci_eval_role;       -- agent SQL + evaluation tasks
@@ -35,6 +37,8 @@ GRANT SELECT ON TABLE coco.silver.reporting_calendar TO ROLE ci_eval_role;      
 GRANT SELECT ON SEMANTIC VIEW coco.semantic.sv_ap_analytics TO ROLE ci_eval_role;            -- analyst tool
 GRANT USAGE ON CORTEX SEARCH SERVICE coco.agent.ap_invoice_search TO ROLE ci_eval_role;      -- search tool
 GRANT USAGE ON AGENT coco.agent.ap_invoice_agent TO ROLE ci_eval_role;                       -- run the agent
+GRANT USAGE ON PROCEDURE coco.agent.invoice_totals(VARCHAR, VARCHAR, VARCHAR) TO ROLE ci_eval_role;  -- agent tool: exact totals (v1.1.0)
+GRANT USAGE ON PROCEDURE coco.agent.review_status(NUMBER) TO ROLE ci_eval_role;  -- agent tool: BR-004 review status (v1.1.0)
 GRANT MONITOR ON AGENT coco.agent.ap_invoice_agent TO ROLE ci_eval_role;                     -- evaluate the agent
 GRANT SELECT, INSERT, DELETE ON TABLE coco.eval.golden_questions TO ROLE ci_eval_role;       -- refresh + read the dataset
 GRANT READ, WRITE ON STAGE coco.eval.config_stage TO ROLE ci_eval_role;                      -- PUT + read the config
