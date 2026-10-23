@@ -35,7 +35,7 @@ def run_evaluation() -> list[dict]:
     """Run every dataset row through the agent and score the result."""
     results = []                                        # collect one result dict per question
     for row in load_dataset():                          # iterate the golden dataset in order
-        answer = run_agent(row["question"])              # call the live agent with this question
+        answer, _flags = run_agent(row["question"])      # call the live agent (check C flags unused by this heuristic run)
         passed, note = score(answer, row)                 # score the answer against its named check
         results.append({                                  # record everything needed to audit this run later
             "id": row["id"],
