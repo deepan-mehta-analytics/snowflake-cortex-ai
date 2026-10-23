@@ -176,3 +176,39 @@ def test_both_roles_get_and_are_checked_for_tool_procedures():
     for name in ("'COCO.AGENT.INVOICE_TOTALS'", "'COCO.AGENT.REVIEW_STATUS'"):  # expected rows in the check
         assert check.count(name) == 2, name                                # one per role
     assert "LIKE E.NAME || '(%'" in check                                   # SHOW GRANTS names carry the signature
+
+# ── Agent spec: procedure tools + loud failure on missing grants (v1.1.0) ──
+def live_agent_spec():
+    """The YAML inside 00b's ALTER AGENT … SET SPECIFICATION $$ … $$ body, parsed."""
+    import yaml                                                            # pyyaml (requirements-dev)
+    text = (ROOT / "sql/04_mcp/00b_fix_ap_invoice_agent.sql").read_text(encoding="utf-8")  # deploy file
+    alter = [s for s in split_statements(text) if s.upper().lstrip().startswith("ALTER AGENT") and "$$" in s][0]  # spec statement
+    return yaml.safe_load(alter.split("$$")[1])                            # body between the dollar quotes
+
+def cli_agent_spec():
+    """The Snowflake CLI copy of the agent spec, parsed."""
+    import yaml                                                            # pyyaml (requirements-dev)
+    return yaml.safe_load((ROOT / "cortex_project/ap_invoice_agent.agent.yaml").read_text(encoding="utf-8"))  # CLI copy
+
+def test_agent_spec_copies_match():
+    """The live spec in 00b and the CLI copy are the same document."""
+    assert live_agent_spec() == cli_agent_spec()                           # no drift between the two copies
+
+def test_agent_declares_both_procedure_tools():
+    """invoice_totals and review_status are generic tools backed by the coco.agent procedures."""
+    spec = live_agent_spec()                                               # deployed spec
+    tools = {t["tool_spec"]["name"]: t["tool_spec"] for t in spec["tools"]}  # name → tool_spec
+    expected = {"invoice_totals": "COCO.AGENT.INVOICE_TOTALS", "review_status": "COCO.AGENT.REVIEW_STATUS"}
+    for name, identifier in expected.items():                              # each procedure tool
+        tool = tools[name]                                                 # KeyError = tool missing
+        assert tool["type"] == "generic", name                             # custom tool type
+        assert tool["input_schema"]["type"] == "object", name              # JSON-schema object
+        assert all(p["type"] != "object" for p in tool["input_schema"]["properties"].values()), name  # docs: no object params
+        resource = spec["tool_resources"][name]                            # matching resource block
+        assert resource["type"] == "procedure" and resource["identifier"] == identifier, name  # backed by the procedure
+        assert resource["execution_environment"] == {"type": "warehouse", "warehouse": "WH_COCO_PIPELINE", "query_timeout": 60}, name
+    assert {"ap_semantic_view", "ap_invoice_search"} <= set(tools)         # the v1.0.0 tools stay
+
+def test_agent_rejects_inaccessible_tools():
+    """A role missing a tool grant fails the run instead of silently skipping the tool (default is accept)."""
+    assert live_agent_spec()["orchestration"]["tool_not_accessible"] == "reject"  # top-level orchestration key
