@@ -111,10 +111,24 @@ def test_sql_runner_prints_box_drawing_on_a_cp1252_console(monkeypatch):
     run_sql_checks.use_utf8_output()                         # what main() calls first
     print("-- ══════ header ══════")                         # must not raise UnicodeEncodeError
 
+# ── Agent tool procedures (v1.1.0) ────────────────────────────
+def test_agent_tools_are_in_the_manifest():
+    """Both agent tool procedures are deployed by deploy.py, after the guardrail review view they read."""
+    entries = read_manifest()                                # the real sql/deploy_manifest.txt
+    paths = [rel for _, rel in entries]                      # ordered file list
+    tags = dict((rel, tag) for tag, rel in entries)          # file → deploy/checklist
+    for rel in ("07_agent_tools/01_invoice_totals.sql",):    # tool files added so far
+        assert tags.get(rel) == "deploy", rel                # run by deploy.py --apply
+        assert paths.index(rel) > paths.index("05_guardrails/04_review_queue_view.sql"), rel  # after its dependency
+        statements = split_statements((ROOT / "sql" / rel).read_text(encoding="utf-8"))  # what deploy.py will send
+        bodies = [s for s in statements if "CREATE OR REPLACE PROCEDURE" in s.upper()]  # the procedure statement(s)
+        assert len(bodies) == 1 and "RETURN TABLE" in bodies[0].upper(), rel  # one statement, $$ body kept whole
+
 # ── Reporting date + re-runnability ───────────────────────────
 def test_overdue_logic_never_uses_current_date():
     """Overdue is measured against silver.reporting_calendar, never the wall clock."""
-    for rel in ("02_silver/02_dt_vendor_invoice_summary.sql", "03_semantic_view/01_sv_ap_analytics.sql"):
+    for rel in ("02_silver/02_dt_vendor_invoice_summary.sql", "03_semantic_view/01_sv_ap_analytics.sql",
+                "07_agent_tools/01_invoice_totals.sql"):     # v1.1.0 totals tool uses the same as-of date
         code = "\n".join(line.split("--", 1)[0] for line in (ROOT / "sql" / rel).read_text(encoding="utf-8").splitlines())  # ignore comments
         assert "CURRENT_DATE" not in code.upper(), rel           # no wall-clock dependency
         assert "REPORTING_CALENDAR" in code.upper(), rel         # uses the as-of table

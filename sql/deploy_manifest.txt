@@ -19,6 +19,7 @@ deploy    05_guardrails/01_schema_and_fx_rates.sql
 deploy    05_guardrails/02_high_value_dmf.sql
 deploy    05_guardrails/03_attach_to_silver.sql
 deploy    05_guardrails/04_review_queue_view.sql
+deploy    07_agent_tools/01_invoice_totals.sql
 deploy    06_ci/01_eval_objects.sql
 checklist 90_grants.sql
 checklist 04_mcp/01_mcp_server.sql
