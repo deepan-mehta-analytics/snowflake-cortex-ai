@@ -122,3 +122,11 @@ def test_check_c_failure_never_loses_the_answer(monkeypatch):
     monkeypatch.setattr(run_agent, "collect_tool_values", broken)          # break check C
     flags = run_agent.check_amounts({"content": [{"type": "text", "text": "USD 1.00"}]})  # safe wrapper
     assert len(flags) == 1 and "amount check could not run" in flags[0].reason  # reported, not raised
+
+def test_procedure_json_text_result_is_backed():
+    """A procedure tool returns one cell of JSON text (live shape): the numbers inside it back the answer."""
+    cell = json.dumps({"as_of_date": "2025-04-30", "scope": "overdue",
+                       "totals": [{"currency_code": "USD", "invoice_count": 14, "total_amount": 469300.00}]})  # one VARIANT cell
+    message = {"content": [{"type": "tool_result", "tool_result": {"name": "invoice_totals", "status": "success",
+                            "content": [{"type": "json", "json": {"execution_type": "procedure", "result": cell}}]}}]}
+    assert verify_amounts("USD 469,300.00", collect_tool_values(message)) == []  # backed by the JSON inside the cell

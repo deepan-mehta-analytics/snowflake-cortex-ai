@@ -20,7 +20,7 @@ tools:
   - tool_spec:
       type: "generic"
       name: "invoice_totals"
-      description: "Returns exact invoice counts and amount totals, one row per currency (currency_code, invoice_count, total_amount, as_of_date, scope, matched_vendors). Overdue means issued on or before the as-of date and due before it. Never sums across currencies."
+      description: "Returns exact invoice counts and amount totals as JSON: as_of_date, scope, vendor_filter and totals, a list with one entry per currency (currency_code, invoice_count, total_amount, matched_vendors); an empty list means no invoices in scope. Overdue means issued on or before the as-of date and due before it. Never sums across currencies."
       input_schema:
         type: "object"
         properties:
@@ -36,7 +36,7 @@ tools:
   - tool_spec:
       type: "generic"
       name: "review_status"
-      description: "BR-004 finance review: rows of kind flagged are invoices over USD 500,000 at invoice-date FX or that cannot be assessed; rows of kind largest are the biggest invoices with their USD equivalent and percent of the USD 500,000 limit."
+      description: "BR-004 finance review as JSON: threshold_usd (500000), flagged_count, and invoices, a list where row_kind flagged marks invoices over USD 500,000 at invoice-date FX or that cannot be assessed, and row_kind largest marks the biggest invoices with their USD equivalent and percent of the limit."
       input_schema:
         type: "object"
         properties:

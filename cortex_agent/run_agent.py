@@ -113,6 +113,11 @@ def scalars(node):
     elif isinstance(node, list):                                    # walk lists
         for value in node:
             yield from scalars(value)
+    elif isinstance(node, str) and node.strip()[:1] in ("{", "["):  # a procedure's single cell arrives as JSON text
+        try:
+            yield from scalars(json.loads(node))                    # read the numbers inside it
+        except ValueError:                                          # looked like JSON but is not
+            yield node                                              # keep it as a plain value
     else:                                                           # a leaf value
         yield node
 

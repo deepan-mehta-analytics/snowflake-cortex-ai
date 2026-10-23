@@ -122,7 +122,8 @@ def test_agent_tools_are_in_the_manifest():
         assert paths.index(rel) > paths.index("05_guardrails/04_review_queue_view.sql"), rel  # after its dependency
         statements = split_statements((ROOT / "sql" / rel).read_text(encoding="utf-8"))  # what deploy.py will send
         bodies = [s for s in statements if "CREATE OR REPLACE PROCEDURE" in s.upper()]  # the procedure statement(s)
-        assert len(bodies) == 1 and "RETURN TABLE" in bodies[0].upper(), rel  # one statement, $$ body kept whole
+        assert len(bodies) == 1 and "RETURN OBJECT_CONSTRUCT" in bodies[0].upper(), rel  # one statement, $$ body kept whole
+        assert "RETURNS VARIANT" in bodies[0].upper() and "RETURNS TABLE" not in bodies[0].upper(), rel  # live: tools need ONE cell
 
 # ── Reporting date + re-runnability ───────────────────────────
 def test_overdue_logic_never_uses_current_date():
@@ -242,7 +243,7 @@ def test_invoice_totals_treats_empty_strings_as_omitted():
 def test_review_status_percent_fits_huge_invoices():
     """An invoice typo with extra zeros (≥ USD 500M) is BR-004's own case: the percent column must not overflow."""
     code = sql_code("07_agent_tools/02_review_status.sql")                 # procedure code
-    assert "NUMBER(6,1)" not in code and "PERCENT_OF_THRESHOLD NUMBER(12,1)" in code  # wide enough
+    assert "NUMBER(6,1)" not in code and "NUMBER(12,1) AS PERCENT_OF_THRESHOLD" in code  # wide enough
 
 def test_procedure_comment_comes_before_execute_as():
     """Snowflake Scripting clause order is LANGUAGE … COMMENT … EXECUTE AS … AS (live: 'unexpected COMMENT' otherwise)."""
