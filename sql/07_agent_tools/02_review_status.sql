@@ -25,8 +25,8 @@ RETURNS TABLE (row_kind VARCHAR, invoice_number VARCHAR, vendor_name VARCHAR, in
                currency_code VARCHAR, usd_equivalent_amount NUMBER(18,2), percent_of_threshold NUMBER(12,1),
                review_reason VARCHAR)                                 -- flagged rows first, then the largest
 LANGUAGE SQL                                                          -- Snowflake Scripting
-EXECUTE AS OWNER                                                      -- callers need only USAGE on the procedure
 COMMENT = 'Agent tool: BR-004 flagged invoices (> USD 500,000 at invoice-date FX) plus the largest invoices and % of the limit'  -- shown in SHOW PROCEDURES
+EXECUTE AS OWNER                                                      -- callers need only USAGE on the procedure
 AS
 $$
 DECLARE

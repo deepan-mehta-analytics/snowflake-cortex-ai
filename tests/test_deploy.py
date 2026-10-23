@@ -243,3 +243,9 @@ def test_review_status_percent_fits_huge_invoices():
     """An invoice typo with extra zeros (≥ USD 500M) is BR-004's own case: the percent column must not overflow."""
     code = sql_code("07_agent_tools/02_review_status.sql")                 # procedure code
     assert "NUMBER(6,1)" not in code and "PERCENT_OF_THRESHOLD NUMBER(12,1)" in code  # wide enough
+
+def test_procedure_comment_comes_before_execute_as():
+    """Snowflake Scripting clause order is LANGUAGE … COMMENT … EXECUTE AS … AS (live: 'unexpected COMMENT' otherwise)."""
+    for rel in ("07_agent_tools/01_invoice_totals.sql", "07_agent_tools/02_review_status.sql"):  # both tool procedures
+        header = sql_code(rel).split("$$", 1)[0]                           # clauses before the body
+        assert header.index("COMMENT =") < header.index("EXECUTE AS OWNER"), rel  # documented order

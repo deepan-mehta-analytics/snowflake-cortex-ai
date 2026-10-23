@@ -27,8 +27,8 @@ CREATE OR REPLACE PROCEDURE agent.invoice_totals(
 RETURNS TABLE (currency_code VARCHAR, invoice_count NUMBER, total_amount NUMBER(18,2), as_of_date DATE, scope VARCHAR,
                matched_vendors VARCHAR)                               -- one row per currency, naming the vendor(s) counted
 LANGUAGE SQL                                                          -- Snowflake Scripting
-EXECUTE AS OWNER                                                      -- callers need only USAGE on the procedure
 COMMENT = 'Agent tool: exact invoice counts and amount totals per currency, overdue or all, as of a date, optionally one vendor'  -- shown in SHOW PROCEDURES
+EXECUTE AS OWNER                                                      -- callers need only USAGE on the procedure
 AS
 $$
 DECLARE
