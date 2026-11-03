@@ -572,6 +572,7 @@ A test Dynamic Table over the fixture also proved that DMF results on a Dynamic 
 - **Locked-down CI network:** GitHub Enterprise Cloud larger runners with static IP ranges, or self-hosted runners, with `ci_eval_network_policy` narrowed from `0.0.0.0/0` to those ranges
 - **Treasury-grade FX:** Treasury's corporate rates or a paid Snowflake Marketplace FX feed behind `guardrails.fx_rates`, the one place BR-004 reads rates
 - **CI/CD across environments:** `scripts/deploy.py` run from GitHub Actions into separate dev and prod accounts of a Snowflake organization, gated by the same evaluation, with a fresh-account deploy from checklist section A as its first test
+- **Governance at scale:** Snowflake auto-classification with system tags (`SEMANTIC_CATEGORY`, `PRIVACY_CATEGORY`) on the AP tables, driving masking policies on sensitive columns, plus account-level Cortex AI Guardrails (`advanced_prompt_injection`) screening every agent request
 - **Claude access, again:** the MCP server (built, live 2026-10-02 → 2026-11-03) is re-created from `sql/04_mcp/` on any account
 
 ---
