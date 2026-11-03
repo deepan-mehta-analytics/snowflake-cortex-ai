@@ -51,9 +51,20 @@ runs. Credits from `SNOWFLAKE.ACCOUNT_USAGE.METERING_DAILY_HISTORY` for that day
 | `SERVERLESS_TASK` | 0.005 | evaluation tasks |
 | **Total** | **7.219** | |
 
-Estimated cost ≈ **$17**: 6.36 AI credits at $2.20 (the rate metered for v0.4.0) ≈ $14.00, plus
-0.86 compute credits at ≈ $3.41 ≈ $2.90. This is an estimate from credits: on 2026-10-23 the billed
-view (`ORGANIZATION_USAGE.USAGE_IN_CURRENCY_DAILY`) did not yet include the day's AI or warehouse
-usage. For comparison, v1.0.0 took five paid runs at about $8 each.
+Billed cost **$18.12**, from `SNOWFLAKE.ORGANIZATION_USAGE.USAGE_IN_CURRENCY_DAILY` for 2026-10-23
+(read 2026-11-03, after the billing view caught up):
+
+| Usage type | Billed |
+|---|---|
+| cortex agents | $7.50 |
+| ai inference | $6.50 |
+| compute | $3.19 |
+| cloud services | $0.89 |
+| serverless tasks | $0.04 |
+| **Total** | **$18.12** |
+
+The day's estimate from credits alone was ≈ $17 (AI credits at $2.20, compute at ≈ $3.41); the
+trial's free-usage balance fell by $17.80 that day ($78.28 → $60.48), matching the bill. For
+comparison, v1.0.0 took five paid runs at about $8 each.
 
 The deploy was verified as a re-run over the existing account; a deploy into an empty account has not been run.
