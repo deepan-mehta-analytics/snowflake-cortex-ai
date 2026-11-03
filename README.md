@@ -18,7 +18,7 @@ An accounts-payable data platform built entirely inside **Snowflake**: invoices 
 - 💬 **Plain-English answers** — a **Cortex Agent** grounded in a native **Semantic View** answers questions like *"which vendors have the most overdue invoices, and how much?"* through text-to-SQL over governed metrics
 - 🔍 **Free-text search** — **Cortex Search** finds invoices by what was bought
 - 🧮 **Exact totals from tested code** — two stored-procedure tools: `invoice_totals` returns per-currency counts and totals as of any date, and `review_status` answers BR-004 finance-review questions
-- 🔌 **Available in Claude** — the same agent is published through a Snowflake-managed **MCP server**, over OAuth as a least-privilege Snowflake user
+- 🔌 **Available in Claude** — the same agent was published through a Snowflake-managed **MCP server**, over OAuth as a least-privilege Snowflake user (live 2026-10-02 → 2026-11-03, removed ahead of the trial end; setup kept in `sql/04_mcp/`)
 
 #### ✅ Quality and trust
 
@@ -69,7 +69,7 @@ This project implements **a governed, agent-queryable accounts-payable data plat
 - 🤖 **A Cortex Agent** — Cortex Analyst (text-to-SQL over the semantic view) plus Cortex Search, answering both quantitative and free-text AP questions
 - 🧮 **Two stored-procedure tools (v1.1.0)** — `agent.invoice_totals` (exact per-currency counts and totals, overdue or all, as of a date, optionally one vendor) and `agent.review_status` (BR-004 flagged invoices plus the largest invoices and their share of the USD 500,000 limit), each with SQL checks against the answer keys
 - 🔢 **Two amount checks** — check B confirms the expected per-currency totals appear in each eval answer (warn-only); check C in `run_agent.py` flags any amount in an answer that no tool result backs, with the true sum of the rows when it can be worked out
-- 🔌 **A Snowflake-managed MCP server** — `coco.mcp.ap_invoice_mcp` exposes the agent, Cortex Analyst and Cortex Search as 3 MCP tools, connected to Claude (claude.ai custom connector) via Snowflake OAuth as a dedicated user pinned to a narrow read-only role
+- 🔌 **A Snowflake-managed MCP server** — `coco.mcp.ap_invoice_mcp` exposes the agent, Cortex Analyst and Cortex Search as 3 MCP tools, connected to Claude (claude.ai custom connector) via Snowflake OAuth as a dedicated user pinned to a narrow read-only role; removed on 2026-11-03 with `sql/04_mcp/99_teardown.sql` (smoke-test results below)
 
 ### 🛡️ Data quality
 
@@ -176,8 +176,8 @@ bronze.sap_ap_   bronze.oracle_   bronze.baan_    bronze.workday_
 | 🤖 `ap_invoice_agent` | Cortex Agent wrapping the Analyst, Search and two procedure tools behind one conversational interface; a role missing a tool grant fails the run (`tool_not_accessible: reject`) |
 | 🧮 `invoice_totals` | Procedure tool: exact per-currency invoice counts and totals, overdue or all, as of a date, optionally for part of a vendor name; returns one JSON cell |
 | 📋 `review_status` | Procedure tool: BR-004 flagged invoices from the review queue plus the largest invoices and their share of the USD 500,000 limit; returns one JSON cell |
-| 🔌 `ap_invoice_mcp` | Snowflake-managed MCP server publishing the agent, Analyst and Search as tools for Claude |
-| 🔐 `mcp_claude_oauth` / `mcp_claude_role` | OAuth integration + least-privilege role the Claude connector signs in with (read access to Silver + semantic view, USAGE on the two agent tool procedures) |
+| 🔌 `ap_invoice_mcp` | Snowflake-managed MCP server publishing the agent, Analyst and Search as tools for Claude (removed 2026-11-03) |
+| 🔐 `mcp_claude_oauth` / `mcp_claude_role` | OAuth integration + least-privilege role the Claude connector signs in with (read access to Silver + semantic view, USAGE on the two agent tool procedures); removed 2026-11-03 |
 | 💱 `guardrails.fx_rates` | View over Snowflake's free FX dataset: one USD rate per currency per day (weak currencies use 1 ÷ USD→X to keep precision) |
 | 🛡️ `guardrails.count_invoices_over_usd_500k` | Data Metric Function: invoices > USD 500,000 at the invoice-date rate, plus unassessable ones (no rate / no amount) |
 | 📋 `guardrails.high_value_invoices_for_review` | Review queue: every flagged invoice with USD amount, rate, rate date/age and reason |
@@ -501,7 +501,7 @@ Premier Office Solutions, 2, 8800.00
 ```
 Before v1.0.0 the same question measured "overdue" against today's date, so by October 2026 every one of the 50 invoices counted as overdue and the ranking no longer separated vendors.
 
-🔌 **MCP smoke test — 3/3 tools working from Claude** (2026-10-02, via the claude.ai connector):
+🔌 **MCP smoke test — 3/3 tools working from Claude** (2026-10-02, via the claude.ai connector; the connector and its Snowflake user were removed on 2026-11-03):
 
 | MCP tool | Test question | Result |
 |---|---|---|
@@ -542,6 +542,7 @@ A test Dynamic Table over the fixture also proved that DMF results on a Dynamic 
 - **The LLM judge varies between runs** (q11 `logical_consistency` went 1.00 → 0.33 between two identical runs in v0.4.0), so the gate compares means with a 0.10 tolerance and only warns on single questions. The v1.0.0 and v1.1.0 baselines are single runs: v1.0.0's was accepted after spot checks of the two questions that dropped, v1.1.0's after passing against v1.0.0 on the 19 shared questions and a second gated run on `main`
 - **Each object re-created by the deploy loses its grants** (`CREATE OR REPLACE`), so `sql/90_grants.sql` must follow every deploy; `sql/91_check_grants.sql` catches a missed step
 - **Model drift under `auto` is caught only when the live eval runs** — on a push to an agent/SQL/eval path or a manual run, not on a schedule
+- **Trial wind-down:** the MCP server, OAuth integration and `claude_mcp_user` were removed on 2026-11-03 (`sql/04_mcp/99_teardown.sql`); the CI identity, guardrail and remaining live objects are torn down before the trial ends 2026-11-11. The results stay in `docs/evidence/`
 - **The live eval is switched off** (`LIVE_EVAL_ENABLED = false`; off since 2026-10-19, switched on only for the two v1.1.0 gated runs on 2026-10-23), because the trial credit and PATs end 2026-11-11; pushes skip the job, and the Live eval badge shows the last run
 - Snowsight's Agent Studio UI was unreliable for the registered agent during development (a save bug left it with one tool on the wrong warehouse), so the agent is defined in SQL (`sql/04_mcp/00b_fix_ap_invoice_agent.sql`) with a synced copy in `cortex_project/`. Both `run_agent.py` and the MCP server now run that one object
 - The orchestration model is `auto`, so Snowflake can switch to a newer model without a code change. That protects the client from model retirement, but it also means answer quality can shift silently. The CI evaluation gate is how changes are caught (see the limitation on when it runs above)
